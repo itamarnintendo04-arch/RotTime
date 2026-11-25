@@ -1,0 +1,188 @@
+name: iOS Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: "IPA export method when signing secrets exist"
+        type: choice
+        options: [development, ad-hoc, release-testing, app-store-connect]
+        default: development
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Override these with repository *variables* (Settings → Secrets and variables → Actions → Variables).
+  RT_BUNDLE_ID: ${{ vars.RT_BUNDLE_ID || 'com.rottime.app' }}
+  RT_APP_GROUP: ${{ vars.RT_APP_GROUP || 'group.com.rottime.app' }}
+  EXPORT_METHOD: ${{ inputs.export_method || vars.EXPORT_METHOD || 'development' }}
+
+jobs:
+  build:
+    name: Build, test & package
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Resolve dependencies
+        run: xcodebuild -resolvePackageDependencies -project RotTime.xcodeproj -scheme RotTime
+
+      - name: Validate bundle identifiers, plists & entitlements
+        run: bash scripts/ci/validate_project.sh "$RT_BUNDLE_ID" "$RT_APP_GROUP"
+
+      - name: Build app + all extensions (device, unsigned)
+        run: |
+          set -o pipefail
+          mkdir -p build/logs
+          xcodebuild build \
+            -project RotTime.xcodeproj -scheme RotTime \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            RT_BUNDLE_ID="$RT_BUNDLE_ID" RT_APP_GROUP="$RT_APP_GROUP" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee build/logs/build-device.log | xcbeautify --renderer github-actions
+
+      - name: Verify embedded extensions
+        run: |
+          APP=build/DerivedData/Build/Products/Release-iphoneos/RotTime.app
+          ls -la "$APP" "$APP/PlugIns" "$APP/Extensions" || true
+          for ext in PlugIns/RotTimeMonitor.appex PlugIns/RotTimeShieldConfiguration.appex PlugIns/RotTimeShieldAction.appex Extensions/RotTimeReport.appex; do
+            if [ -d "$APP/$ext" ]; then echo "✅ $ext"; else echo "::error::$ext was not embedded"; exit 1; fi
+          done
+
+      - name: Run unit tests (simulator)
+        run: |
+          set -o pipefail
+          UDID=$(bash scripts/ci/pick_simulator.sh)
+          echo "Using simulator $UDID"
+          xcodebuild test \
+            -project RotTime.xcodeproj -scheme RotTime \
+            -destination "id=$UDID" \
+            -derivedDataPath build/DerivedDataSim \
+            -resultBundlePath build/TestResults.xcresult \
+            RT_BUNDLE_ID="$RT_BUNDLE_ID" RT_APP_GROUP="$RT_APP_GROUP" \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build/logs/test.log | xcbeautify --renderer github-actions
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/unsigned/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/RotTime.app build/unsigned/Payload/
+          (cd build/unsigned && zip -qry ../RotTime-unsigned.ipa Payload)
+          ls -lh build/RotTime-unsigned.ipa
+
+      - name: Check for signing secrets
+        id: signing
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$BUILD_CERTIFICATE_BASE64" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets found – a signed IPA will be exported."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing secrets configured, so only an UNSIGNED build was produced. See docs/SIGNING.md to export an installable IPA."
+          fi
+
+      - name: Install certificate & provisioning profiles
+        if: steps.signing.outputs.available == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
+          PROVISIONING_PROFILE_MONITOR_BASE64: ${{ secrets.PROVISIONING_PROFILE_MONITOR_BASE64 }}
+          PROVISIONING_PROFILE_SHIELD_CONFIG_BASE64: ${{ secrets.PROVISIONING_PROFILE_SHIELD_CONFIG_BASE64 }}
+          PROVISIONING_PROFILE_SHIELD_ACTION_BASE64: ${{ secrets.PROVISIONING_PROFILE_SHIELD_ACTION_BASE64 }}
+          PROVISIONING_PROFILE_REPORT_BASE64: ${{ secrets.PROVISIONING_PROFILE_REPORT_BASE64 }}
+        run: bash scripts/ci/install_signing.sh
+
+      - name: Archive (signed)
+        if: steps.signing.outputs.available == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          set -a; source build/signing.env; set +a
+          xcodebuild archive \
+            -project RotTime.xcodeproj -scheme RotTime \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath build/RotTime.xcarchive \
+            -derivedDataPath build/DerivedDataArchive \
+            RT_BUNDLE_ID="$RT_BUNDLE_ID" RT_APP_GROUP="$RT_APP_GROUP" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            RT_PROFILE_APP="$RT_PROFILE_APP" RT_PROFILE_MONITOR="$RT_PROFILE_MONITOR" \
+            RT_PROFILE_SHIELD_CONFIG="$RT_PROFILE_SHIELD_CONFIG" RT_PROFILE_SHIELD_ACTION="$RT_PROFILE_SHIELD_ACTION" \
+            RT_PROFILE_REPORT="$RT_PROFILE_REPORT" \
+            | tee build/logs/archive.log | xcbeautify --renderer github-actions
+
+      - name: Export IPA (signed)
+        if: steps.signing.outputs.available == 'true'
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath build/RotTime.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export | tee build/logs/export.log
+          echo "Signed entitlements of the exported app:"
+          unzip -q -o build/export/RotTime.ipa -d build/export/unzipped
+          codesign -d --entitlements - build/export/unzipped/Payload/RotTime.app
+
+      - name: Upload signed IPA
+        if: steps.signing.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RotTime-signed-ipa
+          path: build/export/*.ipa
+          if-no-files-found: error
+
+      - name: Upload unsigned build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RotTime-unsigned-ipa
+          path: build/RotTime-unsigned.ipa
+          if-no-files-found: ignore
+
+      - name: Upload logs & test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/logs
+            build/TestResults.xcresult
+          if-no-files-found: ignore
+
+      - name: Clean up keychain
+        if: always() && steps.signing.outputs.available == 'true'
+        run: security delete-keychain "${RUNNER_TEMP}/rottime-signing/rottime.keychain-db" || true
