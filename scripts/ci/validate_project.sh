@@ -21,22 +21,18 @@ echo "::group::Bundle identifiers"
 [[ "$BUNDLE_ID" =~ ^[A-Za-z0-9.-]+$ ]] && ok "App bundle id '$BUNDLE_ID' is well-formed" || bad "App bundle id '$BUNDLE_ID' contains invalid characters"
 [[ "$APP_GROUP" == group.* ]] && ok "App Group '$APP_GROUP' starts with 'group.'" || bad "App Group '$APP_GROUP' must start with 'group.'"
 
-# Ask Xcode what each target will actually be built with.
-declare -A EXPECT=(
-  [RotTime]="$BUNDLE_ID"
-  [RotTimeMonitor]="$BUNDLE_ID.monitor"
-  [RotTimeShieldConfiguration]="$BUNDLE_ID.shieldconfig"
-  [RotTimeShieldAction]="$BUNDLE_ID.shieldaction"
-  [RotTimeReport]="$BUNDLE_ID.report"
-)
-for target in "${!EXPECT[@]}"; do
+# Ask Xcode what each target will actually be built with.  (bash 3 compatible – no associative arrays)
+for pair in "RotTime:" "RotTimeMonitor:.monitor" "RotTimeShieldConfiguration:.shieldconfig" \
+            "RotTimeShieldAction:.shieldaction" "RotTimeReport:.report"; do
+  target="${pair%%:*}"
+  expected="$BUNDLE_ID${pair#*:}"
   actual=$(xcodebuild -project RotTime.xcodeproj -target "$target" -showBuildSettings \
              RT_BUNDLE_ID="$BUNDLE_ID" RT_APP_GROUP="$APP_GROUP" 2>/dev/null \
-           | awk -F' = ' '/ PRODUCT_BUNDLE_IDENTIFIER = /{print $2; exit}')
-  if [[ "$actual" == "${EXPECT[$target]}" ]]; then
+           | awk -F' = ' '/ PRODUCT_BUNDLE_IDENTIFIER = /{v=$2} END{print v}') || true
+  if [[ "$actual" == "$expected" ]]; then
     ok "$target → $actual"
   else
-    bad "$target resolved to '$actual', expected '${EXPECT[$target]}'"
+    bad "$target resolved to '$actual', expected '$expected'"
   fi
   if [[ "$target" != "RotTime" && "$actual" != "$BUNDLE_ID".* ]]; then
     bad "$target id must be prefixed by the app id ($BUNDLE_ID.)"

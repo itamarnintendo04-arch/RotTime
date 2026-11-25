@@ -35,7 +35,7 @@ PROFILE_DIRS=("$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/
 for d in "${PROFILE_DIRS[@]}"; do mkdir -p "$d"; done
 
 FAIL=0
-declare -A PROFILE_NAMES
+rm -f build/profile_map.txt
 install_profile() {
   local var="$1" suffix="$2" setting="$3"
   local b64="${!var:-}"
@@ -57,7 +57,7 @@ install_profile() {
   [[ "$fc" == "true" ]] || { echo "::error::$var does not include the Family Controls entitlement. Enable the 'Family Controls (Development)' capability on the App ID (or request distribution approval from Apple) and regenerate the profile."; FAIL=1; }
   [[ "$groups" == *"$RT_APP_GROUP"* ]] || { echo "::error::$var does not include App Group '$RT_APP_GROUP'."; FAIL=1; }
   for d in "${PROFILE_DIRS[@]}"; do cp "$file" "$d/$uuid.mobileprovision"; done
-  PROFILE_NAMES[$bundle]="$name"
+  printf '%s\t%s\n' "$bundle" "$name" >> build/profile_map.txt
   echo "$setting=$name" >> build/signing.env.tmp
 }
 
@@ -97,9 +97,9 @@ rm -f build/signing.env.tmp
   <key>provisioningProfiles</key>
   <dict>
 EOF
-  for bundle in "${!PROFILE_NAMES[@]}"; do
-    printf '    <key>%s</key><string>%s</string>\n' "$bundle" "${PROFILE_NAMES[$bundle]}"
-  done
+  while IFS=$'\t' read -r bundle pname; do
+    printf '    <key>%s</key><string>%s</string>\n' "$bundle" "$pname"
+  done < build/profile_map.txt
   cat <<EOF
   </dict>
 </dict>
