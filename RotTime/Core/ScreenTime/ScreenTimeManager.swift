@@ -43,7 +43,12 @@ final class ScreenTimeManager: ObservableObject {
         do {
             try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
         } catch {
-            errorMessage = Self.describe(error)
+            var message = Self.describe(error)
+            if let profile = ScreenTimeDiagnostics.embeddedProfile(),
+               ((profile["Entitlements"] as? [String: Any])?["com.apple.developer.family-controls"] as? Bool) != true {
+                message = "This build doesn't include Apple's Family Controls entitlement, so iOS won't allow Screen Time access. Rebuild with a profile that has Family Controls enabled (see docs/SIGNING.md)."
+            }
+            errorMessage = message + "\n\nSettings → Check Screen Time connection shows what's missing."
         }
         authorizationStatus = AuthorizationCenter.shared.authorizationStatus
     }

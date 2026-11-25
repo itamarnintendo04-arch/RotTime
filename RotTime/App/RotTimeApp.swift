@@ -8,6 +8,7 @@ struct RotTimeApp: App {
     @StateObject private var screenTime = ScreenTimeManager.shared
     @StateObject private var focus = FocusTimerModel.shared
     @StateObject private var chat = ChatEngineStore.shared
+    @StateObject private var interventions = InterventionCenter.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -17,6 +18,7 @@ struct RotTimeApp: App {
                 .environmentObject(screenTime)
                 .environmentObject(focus)
                 .environmentObject(chat)
+                .environmentObject(interventions)
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { syncOnForeground() }
                 }
@@ -35,6 +37,8 @@ struct RotTimeApp: App {
             chat.runDailyEventsIfNeeded()
         }
         app.evaluateRewards()
+        // A shield's "I want more time" button may have queued a request.
+        interventions.presentPendingIfNeeded()
     }
 }
 
@@ -51,8 +55,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         await MainActor.run {
+            let content = response.notification.request.content
             if response.notification.request.identifier == NotificationManager.focusEndID {
                 AppState.shared.selectedTab = .focus
+            } else if content.categoryIdentifier == MoreTimeRequests.notificationCategory {
+                InterventionCenter.shared.presentPendingIfNeeded(requestID: content.userInfo["requestID"] as? String)
             }
         }
     }

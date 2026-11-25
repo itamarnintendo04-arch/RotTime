@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Every face the mascot can make.
 enum BrainExpression: String, CaseIterable, Codable, Identifiable {
-    case idle, happy, sleeping, surprised, tired, focused, celebrating, love, thinking, wink, proud
+    case idle, happy, sleeping, surprised, tired, focused, celebrating, love, thinking, wink, proud, sad, sick, hurt
 
     var id: String { rawValue }
 
@@ -19,6 +19,9 @@ enum BrainExpression: String, CaseIterable, Codable, Identifiable {
         case .thinking: return "Thinking"
         case .wink: return "Wink"
         case .proud: return "Proud"
+        case .sad: return "Sad"
+        case .sick: return "Sick"
+        case .hurt: return "Ouch"
         }
     }
 }
@@ -46,6 +49,12 @@ struct FaceParams {
     var blush: CGFloat = 0.35
     var tilt: CGFloat = 0
     var sparkGlow: CGFloat = 0.6
+    /// 0…1 green "under the weather" tint, droopy sprout, thermometer.
+    var sickness: CGFloat = 0
+    /// 0…1 tear drops.
+    var tears: CGFloat = 0
+    /// 0…1 band-aid on the head.
+    var bandage: CGFloat = 0
 
     static func lerp(_ a: FaceParams, _ b: FaceParams, _ t: CGFloat) -> FaceParams {
         func l(_ x: CGFloat, _ y: CGFloat) -> CGFloat { x + (y - x) * t }
@@ -63,6 +72,9 @@ struct FaceParams {
         r.blush = l(a.blush, b.blush)
         r.tilt = l(a.tilt, b.tilt)
         r.sparkGlow = l(a.sparkGlow, b.sparkGlow)
+        r.sickness = l(a.sickness, b.sickness)
+        r.tears = l(a.tears, b.tears)
+        r.bandage = l(a.bandage, b.bandage)
         return r
     }
 }
@@ -125,6 +137,17 @@ extension BrainExpression {
         case .proud:
             f.leftEye = .happyArc; f.rightEye = .happyArc; f.browAlpha = 1; f.browLift = 4; f.browTilt = -0.1
             f.mouth = .smile; f.mouthCurve = 1; f.mouthWidth = 1.1; f.blush = 0.6; f.sparkGlow = 1
+        case .sad:
+            f.lid = 0.18; f.look = CGPoint(x: 0, y: 3); f.browAlpha = 1; f.browTilt = -0.55; f.browLift = 2
+            f.mouth = .smile; f.mouthCurve = -0.75; f.mouthWidth = 0.8; f.blush = 0.15; f.tears = 1
+            f.sparkGlow = 0.15; f.tilt = -0.04
+        case .sick:
+            f.lid = 0.48; f.look = CGPoint(x: 0, y: 2.5); f.browAlpha = 0.9; f.browTilt = -0.4
+            f.mouth = .wavy; f.mouthWidth = 0.75; f.blush = 0; f.sickness = 1; f.sparkGlow = 0.05; f.tilt = 0.07
+        case .hurt:
+            f.leftEye = .closed; f.lid = 0.22; f.browAlpha = 1; f.browTilt = -0.45; f.browLift = 1
+            f.mouth = .wavy; f.mouthWidth = 0.85; f.blush = 0.1; f.tears = 0.7; f.bandage = 1
+            f.sickness = 0.35; f.sparkGlow = 0.1; f.tilt = -0.06
         }
         return f
     }
@@ -132,8 +155,9 @@ extension BrainExpression {
     /// Bounce/breathing energy for the animation loop.
     var motionEnergy: Double {
         switch self {
-        case .sleeping: return 0.35
-        case .tired: return 0.5
+        case .sleeping, .sick: return 0.35
+        case .tired, .sad: return 0.5
+        case .hurt: return 0.6
         case .focused, .thinking: return 0.7
         case .happy, .love, .wink, .proud: return 1.25
         case .celebrating: return 1.8
@@ -145,7 +169,7 @@ extension BrainExpression {
 
 /// The mascot's overall condition, derived from real in-app progress.
 enum BrainState: String, Codable {
-    case energetic, slightlyTired, resting, recovered
+    case energetic, slightlyTired, resting, recovered, sick
 
     var title: String {
         switch self {
@@ -153,6 +177,7 @@ enum BrainState: String, Codable {
         case .slightlyTired: return "A little sleepy"
         case .resting: return "Resting"
         case .recovered: return "Fully recharged"
+        case .sick: return "Feeling sick"
         }
     }
 
@@ -162,6 +187,7 @@ enum BrainState: String, Codable {
         case .slightlyTired: return "Could use a little focus time to warm up."
         case .resting: return "Winding down. Rest is part of the plan."
         case .recovered: return "Daily goal reached — the brain is glowing!"
+        case .sick: return "Too much scrolling made me feel awful. A focus session would heal me."
         }
     }
 
@@ -171,6 +197,7 @@ enum BrainState: String, Codable {
         case .slightlyTired: return .tired
         case .resting: return .sleeping
         case .recovered: return .proud
+        case .sick: return .sick
         }
     }
 
@@ -180,6 +207,7 @@ enum BrainState: String, Codable {
         case .slightlyTired: return "cup.and.saucer.fill"
         case .resting: return "moon.stars.fill"
         case .recovered: return "sparkles"
+        case .sick: return "thermometer.medium"
         }
     }
 }

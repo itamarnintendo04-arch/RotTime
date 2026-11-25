@@ -9,6 +9,7 @@ struct BlockingView: View {
     @State private var instantSelection = FamilyActivitySelection()
     @State private var instantMinutes: Int? = 30
     @State private var instantStrict = false
+    @State private var showDiagnostics = false
 
     private let durations: [Int?] = [15, 30, 60, 120, nil]
 
@@ -26,6 +27,22 @@ struct BlockingView: View {
                     .padding(.top, RTSpacing.s)
 
                     if !screenTime.isAuthorized { authorizationCard }
+                    if let request = MoreTimeRequests.latest {
+                        Card {
+                            HStack(spacing: 12) {
+                                BrainCharacterView(expression: .sad, appearance: app.appearance, size: 64, showDecor: false)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("You asked for more time").font(RTFont.label(.bold))
+                                    RequestTargetLabel(request: request)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            SecondaryButton(title: "Talk to \(app.brainName)", symbol: "bubble.left.fill", tint: app.theme.accent) {
+                                InterventionCenter.shared.presentPendingIfNeeded(requestID: request.id.uuidString)
+                            }
+                            .padding(.top, RTSpacing.m)
+                        }
+                    }
                     if !screenTime.activeShields.isEmpty { activeCard }
                     instantCard
                     VStack(spacing: RTSpacing.m) {
@@ -50,6 +67,12 @@ struct BlockingView: View {
             }
         }
         .sheet(item: $editing) { mode in ModeEditorView(mode: mode) }
+        .sheet(isPresented: $showDiagnostics) {
+            NavigationStack {
+                ScreenTimeDiagnosticsView()
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showDiagnostics = false } } }
+            }
+        }
         .familyActivityPicker(isPresented: $showInstantPicker, selection: $instantSelection)
         .onAppear {
             if let instant = screenTime.mode(.instant) { instantSelection = instant.selection }
@@ -81,6 +104,11 @@ struct BlockingView: View {
                 Task { await screenTime.requestAuthorization() }
             }
             .padding(.top, RTSpacing.m)
+            Button { showDiagnostics = true } label: {
+                Label("Not connecting? Run a check", systemImage: "stethoscope").font(RTFont.label(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
         }
     }
 
@@ -154,9 +182,16 @@ struct BlockingView: View {
             SectionHeader(title: "On the shield", symbol: "hand.wave.fill")
             VStack(alignment: .leading, spacing: 10) {
                 InfoRow(symbol: "face.smiling.inverse", text: "\(app.brainName) greets you with a friendly message and a reflection question.")
-                InfoRow(symbol: "figure.mind.and.body", text: "“Take a mindful pause” asks you to wait \(SharedStore.unlockSettings.waitSeconds)s, then opens the app for \(SharedStore.unlockSettings.unlockMinutes) min.")
-                InfoRow(symbol: "lock.fill", text: "Strict sessions hide the pause button entirely.")
+                InfoRow(symbol: "phone.bubble.fill", text: "“I want more time” makes \(app.brainName) reach out — chat, a pretend FaceTime call, a voice note, a letter or a breath — different every time.")
+                InfoRow(symbol: "hand.raised.fill", text: "There's always an “Actually, I don't want to” button. Taking 5, 10 or 30 minutes makes \(app.brainName) sick and sad until your next focus session.")
+                InfoRow(symbol: "lock.fill", text: "Strict sessions never offer more time.")
                 InfoRow(symbol: "star.fill", text: "Every “I'll stay focused” tap earns 2 spark points.")
+                Button {
+                    InterventionCenter.shared.preview()
+                } label: {
+                    Label("Preview it now", systemImage: "play.circle.fill").font(RTFont.label(.bold))
+                }
+                .padding(.top, 4)
             }
             .padding(.top, RTSpacing.s)
         }

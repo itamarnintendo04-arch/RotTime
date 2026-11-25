@@ -108,6 +108,21 @@ public enum ShieldController {
         return changed
     }
 
+    /// Ends every temporary unlock right away and re-applies the full shields.
+    public static func revokeTemporaryUnlocks() {
+        var shields = SharedStore.activeShields
+        for (key, var record) in shields {
+            record.exemptApplications = []
+            record.exemptWebDomains = []
+            record.exemptCategories = []
+            record.exemptionEndsAt = nil
+            shields[key] = record
+            write(record)
+        }
+        SharedStore.activeShields = shields
+        ActivityScheduler.stop(name: ActivityScheduler.relockActivity)
+    }
+
     /// Whether any active shield covering the app is strict.
     public static var anyStrictActive: Bool {
         SharedStore.activeShields.values.contains { $0.strict }

@@ -22,9 +22,11 @@ public enum ShieldCopy {
         "Stretch, sip some water, then decide about %@.",
     ]
 
-    public static let breathing = [
-        "Breathe in for 4… hold… out for 6. Tap “I'm ready” once %d seconds have passed.",
-        "Roll your shoulders and look at something far away. In %d seconds you can choose again.",
+    /// Shown under the reflection when the "more time" button is available.
+    public static let moreTimeHints = [
+        "Need more time? %@ will call you to talk it over first.",
+        "Want more? Ask %@ — you'll get a notification to open.",
+        "Asking for more time opens a quick chat with %@.",
     ]
 
     /// Deterministic per-minute rotation so the copy changes but doesn't flicker.
@@ -71,46 +73,5 @@ public struct ShieldPalette {
             buttonText: lightBackground && id != "minimal" ? .white : (id == "minimal" ? .white : hex(0x1B1324)),
             secondaryText: lightBackground ? hex(accent) : .white
         )
-    }
-}
-
-/// State for the two-tap "mindful pause" flow on the shield:
-/// first tap starts a short waiting period, a second tap after it has passed unlocks.
-public enum MindfulPause {
-    public static func key<T: Encodable>(for token: T) -> String {
-        guard let data = try? JSONEncoder().encode(token) else { return "unknown" }
-        return data.base64EncodedString()
-    }
-
-    static var pending: [String: Date] {
-        get { SharedStore.load([String: Date].self, .pendingPauses, default: [:]) }
-        set {
-            // Forget pauses older than ten minutes.
-            let cutoff = Date().addingTimeInterval(-600)
-            SharedStore.save(newValue.filter { $0.value > cutoff }, .pendingPauses)
-        }
-    }
-
-    public static func startedAt(for key: String) -> Date? {
-        guard let date = pending[key], Date().timeIntervalSince(date) < 600 else { return nil }
-        return date
-    }
-
-    public static func begin(for key: String) {
-        var all = pending
-        all[key] = Date()
-        pending = all
-    }
-
-    public static func clear(for key: String) {
-        var all = pending
-        all.removeValue(forKey: key)
-        pending = all
-    }
-
-    public static func secondsRemaining(for key: String, settings: MindfulUnlockSettings) -> Int? {
-        guard let start = startedAt(for: key) else { return nil }
-        let remaining = Double(settings.waitSeconds) - Date().timeIntervalSince(start)
-        return max(0, Int(remaining.rounded(.up)))
     }
 }

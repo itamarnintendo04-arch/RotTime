@@ -133,3 +133,46 @@ final class CharacterTests: XCTestCase {
         XCTAssertEqual(45.minutesText, "45m")
     }
 }
+
+final class InterventionTests: XCTestCase {
+    func testStyleNeverRepeatsTwiceInARow() {
+        var previous = InterventionStyle.next()
+        for _ in 0..<50 {
+            let next = InterventionStyle.next()
+            XCTAssertNotEqual(next, previous)
+            previous = next
+        }
+    }
+
+    func testDurationLinesExistForEveryOption() {
+        for minutes in InterventionCenter.durations {
+            XCTAssertFalse(InterventionCopy.durationLine(minutes).isEmpty)
+        }
+        let session = InterventionSession(request: nil, style: .chat)
+        XCTAssertTrue(session.isPreview)
+        XCTAssertTrue(session.grantedLine(10).contains("10"))
+    }
+
+    func testOldDayStatsStillDecode() throws {
+        let old = #"{"focusSeconds":120,"focusSessions":1,"breaks":0,"blockSessions":0,"shieldResists":2,"mindfulUnlocks":0,"chatMessages":3}"#
+        let stats = try JSONDecoder().decode(DayStats.self, from: Data(old.utf8))
+        XCTAssertEqual(stats.shieldResists, 2)
+        XCTAssertEqual(stats.extraMinutes, 0)
+        XCTAssertEqual(stats.moreTimeDeclined, 0)
+    }
+
+    func testHurtAndHeal() {
+        BrainHealth.heal()
+        XCTAssertFalse(BrainHealth.isHurt)
+        BrainHealth.hurt(forMinutes: 5)
+        XCTAssertTrue(BrainHealth.isHurt)
+        BrainHealth.heal()
+        XCTAssertFalse(BrainHealth.isHurt)
+    }
+
+    func testSadFacesShowTearsOrSickness() {
+        XCTAssertGreaterThan(BrainExpression.sad.face(style: .classic).tears, 0)
+        XCTAssertGreaterThan(BrainExpression.sick.face(style: .classic).sickness, 0)
+        XCTAssertGreaterThan(BrainExpression.hurt.face(style: .classic).bandage, 0)
+    }
+}

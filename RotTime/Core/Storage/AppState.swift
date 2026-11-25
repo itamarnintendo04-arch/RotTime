@@ -104,7 +104,7 @@ final class AppState: ObservableObject {
         SharedStore.update(day: start) { s in
             if kind == .focus {
                 s.focusSeconds += seconds
-                if completed { s.focusSessions += 1 }
+                if completed { s.focusSessions += 1; BrainHealth.heal() }
             } else {
                 s.breaks += 1
             }
@@ -246,6 +246,7 @@ final class AppState: ObservableObject {
     /// Derived only from things RotTime measured itself.
     func brainState(now: Date = Date(), sleepActive: Bool) -> BrainState {
         let hour = Calendar.current.component(.hour, from: now)
+        if BrainHealth.isHurt { return .sick }
         if todayGoalProgress >= 1 { return .recovered }
         if sleepActive || hour >= 23 || hour < 6 { return .resting }
         let s = today

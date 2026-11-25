@@ -54,11 +54,13 @@ enum BrainRenderer {
         body.translateBy(x: -120, y: -196)
 
         drawArms(&body, palette: palette, angle: motion.armAngle)
-        drawBody(&body, palette: palette)
-        if !appearance.hat.hidesSprout { drawSprout(&body, t: t, glow: face.sparkGlow) }
+        drawBody(&body, palette: palette, sickness: face.sickness)
+        if !appearance.hat.hidesSprout { drawSprout(&body, t: t, glow: face.sparkGlow, droop: face.sickness) }
         drawFace(&body, face: face, palette: palette, motion: motion, t: t)
         drawAccessory(&body, appearance.accessory, palette: palette, t: t)
         drawHat(&body, appearance.hat, t: t)
+        if face.bandage > 0.01 { drawBandage(&body, amount: face.bandage) }
+        if face.sickness > 0.6 { drawThermometer(&body, t: t, amount: face.sickness) }
 
         // In front
         drawEffect(&ctx, appearance.effect, t: t, palette: palette)
@@ -186,7 +188,7 @@ enum BrainRenderer {
         return p
     }
 
-    static func drawBody(_ ctx: inout GraphicsContext, palette: BodyColor) {
+    static func drawBody(_ ctx: inout GraphicsContext, palette: BodyColor, sickness: CGFloat = 0) {
         let outline = bodyPath(inset: 3.5)
         ctx.fill(outline, with: .color(palette.outline))
         let body = bodyPath()
@@ -221,6 +223,37 @@ enum BrainRenderer {
                 h.fill(ellipse(.zero, 17, 7), with: .color(.white.opacity(0.42)))
             }
             layer.fill(circle(CGPoint(x: 108, y: 80), 3.2), with: .color(.white.opacity(0.5)))
+            // Under-the-weather green tint
+            if sickness > 0.01 {
+                layer.fill(Path(CGRect(x: 0, y: 0, width: 240, height: 240)),
+                           with: .color(Color(hex: 0x9CCB5E).opacity(Double(sickness) * 0.45)))
+            }
+        }
+    }
+
+    static func drawBandage(_ ctx: inout GraphicsContext, amount: CGFloat) {
+        var c = ctx
+        c.opacity = Double(amount)
+        for angle in [CGFloat(0.55), -0.55] {
+            local(c, at: CGPoint(x: 150, y: 84), rotate: angle) { b in
+                let strip = Path(roundedRect: CGRect(x: -20, y: -6, width: 40, height: 12), cornerRadius: 6)
+                b.fill(strip, with: .color(Color(hex: 0xF5D3A8)))
+                b.stroke(strip, with: .color(Color(hex: 0xB58A5A)), lineWidth: 2)
+                b.fill(Path(roundedRect: CGRect(x: -6, y: -5, width: 12, height: 10), cornerRadius: 3), with: .color(Color(hex: 0xFFF1DE)))
+            }
+        }
+    }
+
+    static func drawThermometer(_ ctx: inout GraphicsContext, t: CGFloat, amount: CGFloat) {
+        var c = ctx
+        c.opacity = Double(min(1, (amount - 0.6) / 0.4))
+        local(c, at: CGPoint(x: 130, y: 156), rotate: 0.45 + sin(t * 1.5) * 0.05) { th in
+            let tube = Path(roundedRect: CGRect(x: 0, y: -3.5, width: 34, height: 7), cornerRadius: 3.5)
+            th.fill(tube, with: .color(.white))
+            th.stroke(tube, with: .color(Color(hex: 0x6B6478)), lineWidth: 1.8)
+            th.fill(Path(roundedRect: CGRect(x: 14, y: -1.5, width: 18, height: 3), cornerRadius: 1.5), with: .color(Color(hex: 0xFF4F6E)))
+            th.fill(circle(CGPoint(x: 34, y: 0), 5), with: .color(Color(hex: 0xFF4F6E)))
+            th.stroke(circle(CGPoint(x: 34, y: 0), 5), with: .color(Color(hex: 0x6B6478)), lineWidth: 1.8)
         }
     }
 
@@ -250,8 +283,8 @@ enum BrainRenderer {
         ctx.fill(ellipse(CGPoint(x: 120, y: 207), 54 * shrink, 7 * shrink), with: .color(.black.opacity(0.13)))
     }
 
-    static func drawSprout(_ ctx: inout GraphicsContext, t: CGFloat, glow: CGFloat) {
-        local(ctx, at: CGPoint(x: 120, y: 64), rotate: sin(t * 1.4) * 0.16) { s in
+    static func drawSprout(_ ctx: inout GraphicsContext, t: CGFloat, glow: CGFloat, droop: CGFloat = 0) {
+        local(ctx, at: CGPoint(x: 120, y: 64), rotate: sin(t * 1.4) * 0.16 * (1 - droop * 0.7) + droop * 1.1) { s in
             var stem = Path()
             stem.move(to: .zero)
             stem.addCurve(to: CGPoint(x: 3, y: -28), control1: CGPoint(x: -6, y: -10), control2: CGPoint(x: 8, y: -18))
@@ -301,6 +334,27 @@ enum BrainRenderer {
         }
 
         drawMouth(&ctx, face: face, palette: palette, t: t)
+
+        if face.tears > 0.01 {
+            for (i, x) in [CGFloat(90), 150].enumerated() {
+                let ph = fract(t * 0.55 + CGFloat(i) * 0.45)
+                var c = ctx
+                c.opacity = Double(face.tears) * Double(1 - ph * 0.8)
+                // streak
+                var streak = Path()
+                streak.move(to: CGPoint(x: x, y: 140)); streak.addLine(to: CGPoint(x: x - 1, y: 150))
+                c.stroke(streak, with: .color(Color(hex: 0x7CC8FF).opacity(0.6)), style: stroke(3))
+                // falling drop
+                local(c, at: CGPoint(x: x - 1, y: 146 + ph * 34)) { d in
+                    var drop = Path()
+                    drop.move(to: CGPoint(x: 0, y: -6))
+                    drop.addQuadCurve(to: CGPoint(x: 0, y: 5), control: CGPoint(x: 6, y: 3))
+                    drop.addQuadCurve(to: CGPoint(x: 0, y: -6), control: CGPoint(x: -6, y: 3))
+                    d.fill(drop, with: .color(Color(hex: 0x7CC8FF)))
+                    d.fill(circle(CGPoint(x: -1.2, y: 1), 1.2), with: .color(.white.opacity(0.9)))
+                }
+            }
+        }
     }
 
     static func drawEye(_ ctx: inout GraphicsContext, at c: CGPoint, style: EyeStyle, face: FaceParams,
@@ -860,6 +914,55 @@ enum BrainRenderer {
                 l.move(to: CGPoint(x: 120 + side * 92, y: 100)); l.addLine(to: CGPoint(x: 120 + side * 104, y: 92))
                 l.move(to: CGPoint(x: 120 + side * 96, y: 118)); l.addLine(to: CGPoint(x: 120 + side * 110, y: 116))
                 c.stroke(l, with: .color(Color(hex: 0xFFB84D)), style: stroke(3))
+            }
+        case .sick:
+            // Sweat drop and a little queasy swirl
+            let bob = sin(t * 2) * 2
+            local(ctx, at: CGPoint(x: 178, y: 92 + bob)) { d in
+                var drop = Path()
+                drop.move(to: CGPoint(x: 0, y: -8))
+                drop.addQuadCurve(to: CGPoint(x: 0, y: 6), control: CGPoint(x: 8, y: 4))
+                drop.addQuadCurve(to: CGPoint(x: 0, y: -8), control: CGPoint(x: -8, y: 4))
+                d.fill(drop, with: .color(Color(hex: 0x9FE0FF)))
+                d.stroke(drop, with: .color(Color(hex: 0x3D7FB0)), lineWidth: 1.5)
+            }
+            local(ctx, at: CGPoint(x: 62, y: 70), rotate: t * 2) { s in
+                var swirl = Path()
+                for k in 0..<40 {
+                    let a = CGFloat(k) * 0.35
+                    let r = CGFloat(k) / 40 * 10
+                    let p = CGPoint(x: cos(a) * r, y: sin(a) * r)
+                    if k == 0 { swirl.move(to: p) } else { swirl.addLine(to: p) }
+                }
+                s.stroke(swirl, with: .color(Color(hex: 0x7FB04A)), style: stroke(2.2))
+            }
+        case .hurt:
+            // Seeing stars
+            for i in 0..<3 {
+                let a = t * 2.4 + CGFloat(i) * 2 * .pi / 3
+                let p = CGPoint(x: 120 + cos(a) * 46, y: 52 + sin(a) * 10)
+                local(ctx, at: p, rotate: t * 3) { c in
+                    let st = star(outer: 7, inner: 3)
+                    c.fill(st, with: .color(Color(hex: 0xFFD84D)))
+                    c.stroke(st, with: .color(Color(hex: 0xA8740E)), lineWidth: 1.4)
+                }
+            }
+        case .sad:
+            // A tiny rain cloud
+            let drift = sin(t * 0.8) * 4
+            var cloud = Path()
+            cloud.addEllipse(in: CGRect(x: 150 + drift, y: 34, width: 44, height: 18))
+            cloud.addPath(circle(CGPoint(x: 164 + drift, y: 36), 10))
+            cloud.addPath(circle(CGPoint(x: 180 + drift, y: 34), 12))
+            ctx.fill(cloud, with: .color(Color(hex: 0x9AA3B8)))
+            for k in 0..<3 {
+                let ph = fract(t * 1.2 + CGFloat(k) * 0.33)
+                var r = Path()
+                let x = 160 + drift + CGFloat(k) * 10
+                r.move(to: CGPoint(x: x, y: 54 + ph * 18)); r.addLine(to: CGPoint(x: x - 2, y: 60 + ph * 18))
+                var c = ctx
+                c.opacity = Double(1 - ph)
+                c.stroke(r, with: .color(Color(hex: 0x7CC8FF)), style: stroke(2))
             }
         default:
             break

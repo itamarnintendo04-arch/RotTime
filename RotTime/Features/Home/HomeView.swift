@@ -87,6 +87,7 @@ struct HomeView: View {
         case .energetic: t.append("I'm buzzing! Let's do something great.")
         case .slightlyTired: t.append("Yawn… a focus session would wake me up!")
         case .resting: t.append("Shhh… quiet hours. Rest is productive too.")
+        case .sick: t.append("Ugh… I feel sick from all that scrolling. 🤒 Focus with me?")
         case .recovered: t.append("Goal reached! I'm fully recharged ✨")
         }
         if focus.isRunning { t = ["Deep focus mode. I believe in you!"] }

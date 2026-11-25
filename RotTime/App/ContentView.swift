@@ -40,6 +40,7 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @EnvironmentObject private var app: AppState
+    @EnvironmentObject private var interventions: InterventionCenter
     @Namespace private var tabNamespace
 
     var body: some View {
@@ -60,6 +61,9 @@ struct MainTabView: View {
             tabBar
         }
         .animation(.easeInOut(duration: 0.22), value: app.selectedTab)
+        .fullScreenCover(item: $interventions.session) { session in
+            InterventionView(session: session)
+        }
     }
 
     /// Height reserved at the bottom of each screen for the floating tab bar.

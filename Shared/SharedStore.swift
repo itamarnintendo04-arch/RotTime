@@ -30,6 +30,7 @@ public enum SharedStore {
         case focusSession = "rt.focusSession"
         case brainName = "rt.brainName"
         case extensionEvents = "rt.extensionEvents"
+        case moreTimeRequests = "rt.moreTimeRequests"
     }
 
     private static let encoder = JSONEncoder()
@@ -142,18 +143,40 @@ public struct DayStats: Codable, Equatable {
     public var blockSessions: Int = 0
     /// Times the user tapped "I'll stay focused" on a shield.
     public var shieldResists: Int = 0
-    /// Times the user completed a mindful pause and unlocked an app temporarily.
+    /// Times the user took extra time on a shielded app.
     public var mindfulUnlocks: Int = 0
     public var chatMessages: Int = 0
+    /// Times the user asked for more time and then said "actually, I don't want to".
+    public var moreTimeDeclined: Int = 0
+    /// Total extra minutes granted on shielded apps.
+    public var extraMinutes: Int = 0
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case focusSeconds, focusSessions, breaks, blockSessions, shieldResists, mindfulUnlocks, chatMessages, moreTimeDeclined, extraMinutes
+    }
+
+    // Tolerant decoding so stats saved by older versions keep loading.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        focusSeconds = try c.decodeIfPresent(Double.self, forKey: .focusSeconds) ?? 0
+        focusSessions = try c.decodeIfPresent(Int.self, forKey: .focusSessions) ?? 0
+        breaks = try c.decodeIfPresent(Int.self, forKey: .breaks) ?? 0
+        blockSessions = try c.decodeIfPresent(Int.self, forKey: .blockSessions) ?? 0
+        shieldResists = try c.decodeIfPresent(Int.self, forKey: .shieldResists) ?? 0
+        mindfulUnlocks = try c.decodeIfPresent(Int.self, forKey: .mindfulUnlocks) ?? 0
+        chatMessages = try c.decodeIfPresent(Int.self, forKey: .chatMessages) ?? 0
+        moreTimeDeclined = try c.decodeIfPresent(Int.self, forKey: .moreTimeDeclined) ?? 0
+        extraMinutes = try c.decodeIfPresent(Int.self, forKey: .extraMinutes) ?? 0
+    }
 
     public var focusMinutes: Int { Int(focusSeconds / 60) }
 }
 
 public struct ExtensionEvent: Codable, Equatable {
     public enum Kind: String, Codable {
-        case shieldResisted, mindfulUnlock, scheduleStarted, scheduleEnded, focusEnded, limitReached
+        case shieldResisted, mindfulUnlock, moreTimeRequested, scheduleStarted, scheduleEnded, focusEnded, limitReached
     }
     public var kind: Kind
     public var date: Date

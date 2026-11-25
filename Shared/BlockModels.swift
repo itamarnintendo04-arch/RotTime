@@ -218,11 +218,10 @@ public struct ActiveShield: Codable {
 }
 
 public struct MindfulUnlockSettings: Codable, Equatable {
-    /// Whether non-strict shields offer the "mindful pause" button.
+    /// Whether non-strict shields offer the "I want more time" button.
     public var enabled: Bool = true
-    /// How long the user has to pause before the second tap unlocks the app.
+    /// Kept for compatibility with settings saved by earlier builds.
     public var waitSeconds: Int = 15
-    /// How long an app stays unlocked after a completed pause.
     public var unlockMinutes: Int = 5
 
     public init() {}

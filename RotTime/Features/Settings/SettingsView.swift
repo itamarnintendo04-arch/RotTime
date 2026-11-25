@@ -36,6 +36,11 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Status", value: screenTime.statusText)
+                    NavigationLink {
+                        ScreenTimeDiagnosticsView()
+                    } label: {
+                        Label("Check Screen Time connection", systemImage: "stethoscope")
+                    }
                     if !screenTime.isAuthorized {
                         Button("Connect Screen Time") { Task { await screenTime.requestAuthorization() } }
                     } else {
@@ -48,19 +53,17 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Offer a mindful pause on shields", isOn: $unlock.enabled)
-                    if unlock.enabled {
-                        Picker("Breathing wait", selection: $unlock.waitSeconds) {
-                            ForEach([5, 10, 15, 30, 60], id: \.self) { Text("\($0) seconds").tag($0) }
-                        }
-                        Picker("Unlock for", selection: $unlock.unlockMinutes) {
-                            ForEach([1, 3, 5, 10, 15], id: \.self) { Text("\($0) min").tag($0) }
-                        }
+                    Toggle("“I want more time” button on shields", isOn: $unlock.enabled)
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { InterventionCenter.shared.preview() }
+                    } label: {
+                        Label("Preview what \(app.brainName) does", systemImage: "play.circle.fill")
                     }
                 } header: {
-                    Text("Interventions")
+                    Text("When you ask for more time")
                 } footer: {
-                    Text("When enabled, non-strict shields show “Take a mindful pause”. You'll be asked to wait and breathe, then the app opens briefly and the shield returns automatically.")
+                    Text("Tapping “I want more time” on a shield sends you a notification. Open it and \(app.brainName) reaches out — a chat, a pretend FaceTime call, a voice message, a letter or a breathing moment, different every time — and asks if you really want to keep scrolling. You can always say “Actually, I don't want to”. If you take 5, 10 or 30 minutes, \(app.brainName) gets sick and sad until your next focus session. Strict sessions never offer more time.")
                 }
                 .onChange(of: unlock) { _, value in SharedStore.unlockSettings = value }
 
