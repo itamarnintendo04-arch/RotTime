@@ -169,7 +169,7 @@ extension BrainExpression {
 
 /// The mascot's overall condition, derived from real in-app progress.
 enum BrainState: String, Codable {
-    case energetic, slightlyTired, resting, recovered, sick
+    case energetic, okay, slightlyTired, resting, recovered, sick, verySick
 
     var title: String {
         switch self {
@@ -178,6 +178,8 @@ enum BrainState: String, Codable {
         case .resting: return "Resting"
         case .recovered: return "Glowing"
         case .sick: return "Feeling sick"
+        case .okay: return "Doing okay"
+        case .verySick: return "Really unwell"
         }
     }
 
@@ -188,6 +190,8 @@ enum BrainState: String, Codable {
         case .resting: return "Winding down. Rest is part of the plan."
         case .recovered: return "Under your phone goal and you focused today — glowing!"
         case .sick: return "Too much phone time made me feel awful. A focus session would heal me."
+        case .okay: return "About halfway through your phone time. Feeling alright."
+        case .verySick: return "Way over your phone goal… everything hurts. Please put it down for a while."
         }
     }
 
@@ -198,6 +202,8 @@ enum BrainState: String, Codable {
         case .resting: return .sleeping
         case .recovered: return .proud
         case .sick: return .sick
+        case .okay: return .idle
+        case .verySick: return .hurt
         }
     }
 
@@ -208,6 +214,8 @@ enum BrainState: String, Codable {
         case .resting: return "moon.stars.fill"
         case .recovered: return "sparkles"
         case .sick: return "thermometer.medium"
+        case .okay: return "face.smiling"
+        case .verySick: return "bandage.fill"
         }
     }
 }

@@ -61,28 +61,49 @@ struct TotalActivityReport: DeviceActivityReportScene {
 struct TotalActivityView: View {
     let summary: ActivitySummary
 
+    private var shared: UserDefaults? {
+        let group = (Bundle.main.object(forInfoDictionaryKey: "RTAppGroupIdentifier") as? String) ?? "group.com.rottime.app"
+        return UserDefaults(suiteName: group)
+    }
+
     /// The goal the user set in RotTime (read-only access to the shared App Group).
     private var goalMinutes: Int {
-        let group = (Bundle.main.object(forInfoDictionaryKey: "RTAppGroupIdentifier") as? String) ?? "group.com.rottime.app"
-        let v = UserDefaults(suiteName: group)?.integer(forKey: "rt.phoneGoalMinutes") ?? 0
+        let v = shared?.integer(forKey: "rt.phoneGoalMinutes") ?? 0
         return v > 0 ? v : 120
+    }
+
+    /// Focus time RotTime recorded today (read from the shared DayStats JSON).
+    private var focusSecondsToday: Double {
+        guard let data = shared?.data(forKey: "rt.dayStats"),
+              let all = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 0 }
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let today = all[f.string(from: Date())] as? [String: Any]
+        return (today?["focusSeconds"] as? Double) ?? 0
+    }
+
+    private func tile(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: symbol).font(.caption.weight(.bold)).foregroundStyle(tint)
+            Text(value).font(.system(size: 22, weight: .heavy, design: .rounded)).lineLimit(1).minimumScaleFactor(0.6)
+            Text(title).font(.system(.caption2, design: .rounded).weight(.semibold)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(tint.opacity(0.12)))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Screen time today")
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(format(summary.total))
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Pickups").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text("\(summary.pickups)").font(.system(.title3, design: .rounded).weight(.bold))
-                }
+            Text("Today at a glance")
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                tile("On the phone", format(summary.total), "iphone", Color(red: 1, green: 0.48, blue: 0.62))
+                tile("Pickups", "\(summary.pickups)", "hand.tap.fill", Color(red: 0.42, green: 0.36, blue: 0.91))
+                tile("Focused", format(TimeInterval(focusSecondsToday)), "timer", Color(red: 0.23, green: 0.67, blue: 0.4))
             }
             let goal = TimeInterval(goalMinutes * 60)
             VStack(alignment: .leading, spacing: 6) {

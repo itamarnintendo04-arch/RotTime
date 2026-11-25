@@ -195,3 +195,14 @@ final class PhoneTimeTests: XCTestCase {
         XCTAssertEqual(profile.phoneGoalMinutes, 120)
     }
 }
+
+final class BrainMoodTests: XCTestCase {
+    func testEveryBrainStateHasCopyAndFace() {
+        let states: [BrainState] = [.energetic, .okay, .slightlyTired, .resting, .recovered, .sick, .verySick]
+        for s in states {
+            XCTAssertFalse(s.title.isEmpty)
+            XCTAssertFalse(s.caption.isEmpty)
+            _ = s.expression.face(style: .classic)
+        }
+    }
+}

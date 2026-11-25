@@ -101,6 +101,8 @@ struct StatisticsView: View {
             HStack(spacing: 12) {
                 StatTile(title: "All-time focus", value: snap.totalFocusMinutes.minutesText, symbol: "infinity", tint: Color(hex: 0x1FB5D6))
                 StatTile(title: "Best streak", value: "\(snap.bestStreak) d", symbol: "trophy.fill", tint: Color(hex: 0xF5B731))
+                StatTile(title: "Longest focus", value: app.longestFocusSeconds > 0 ? app.longestFocusSeconds.shortDuration : "—",
+                         symbol: "infinity", tint: Color(hex: 0xFF8A5C))
             }
         }
     }

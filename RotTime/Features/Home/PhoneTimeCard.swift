@@ -54,7 +54,9 @@ struct PhoneTimeCard: View {
                 } else {
                     Text("\(app.phoneMinutesLeft.minutesText) left").font(RTFont.title(22)).monospacedDigit()
                 }
-                Text("Updated by Screen Time in 10-minute steps.")
+                Label("Focused \(app.todayFocusMinutes.minutesText) today", systemImage: "timer")
+                    .font(RTFont.caption(.bold)).foregroundStyle(Color(hex: 0x3BAA66))
+                Text("Updated in 10-minute steps · exact time & pickups below")
                     .font(RTFont.caption(.medium)).foregroundStyle(.secondary)
                 Button("What counts?") { showPicker = true }.font(RTFont.caption(.bold))
             }

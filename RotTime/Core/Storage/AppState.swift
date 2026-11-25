@@ -132,6 +132,11 @@ final class AppState: ObservableObject {
     var today: DayStats { stats(for: Date()) }
 
     var todayFocusMinutes: Int { today.focusMinutes }
+    /// Longest single focus session ever (seconds).
+    var longestFocusSeconds: Double {
+        focusHistory.filter { $0.kind == .focus }.map(\.seconds).max() ?? 0
+    }
+
     // MARK: Phone time
 
     var phoneGoal: Int { max(1, profile.phoneGoalMinutes) }
@@ -142,6 +147,15 @@ final class AppState: ObservableObject {
     var phoneProgress: Double { Double(phoneMinutesToday) / Double(phoneGoal) }
     var phoneMinutesLeft: Int { max(0, phoneGoal - phoneMinutesToday) }
     var isOverPhoneGoal: Bool { isTrackingPhoneTime && phoneMinutesToday > phoneGoal }
+
+    /// 0…1 "brain health": full when you've barely used your phone, empty at 1.5× your goal.
+    /// Taking extra time on a shield knocks off a bit more until your next focus session.
+    var brainHealth: Double {
+        var h = isTrackingPhoneTime ? 1 - phoneProgress / 1.5 : 0.8
+        if BrainHealth.isHurt { h -= 0.25 }
+        if today.focusSessions > 0 { h += 0.1 }
+        return min(1, max(0, h))
+    }
 
     /// Kept for older callers: how far through today's phone budget we are (0…1).
     var todayGoalProgress: Double { min(1, phoneProgress) }
@@ -294,13 +308,20 @@ final class AppState: ObservableObject {
     /// Derived only from things RotTime measured itself.
     func brainState(now: Date = Date(), sleepActive: Bool) -> BrainState {
         let hour = Calendar.current.component(.hour, from: now)
-        if BrainHealth.isHurt || isOverPhoneGoal { return .sick }
-        if sleepActive || hour >= 23 || hour < 6 { return .resting }
         let s = today
+        // The brain feels exactly as good as your phone time compared with what you wanted.
         if isTrackingPhoneTime {
-            if phoneProgress < 0.6 { return s.focusSessions > 0 ? .recovered : .energetic }
-            return .slightlyTired
+            let r = phoneProgress
+            if r > 1.5 { return .verySick }
+            if r > 1 { return .sick }
+            if BrainHealth.isHurt { return .sick }
+            if sleepActive || hour >= 23 || hour < 6 { return .resting }
+            if r >= 0.75 { return .slightlyTired }
+            if r >= 0.4 { return .okay }
+            return s.focusSessions > 0 ? .recovered : .energetic
         }
+        if BrainHealth.isHurt { return .sick }
+        if sleepActive || hour >= 23 || hour < 6 { return .resting }
         if s.focusSessions > 0 { return .recovered }
         return hour < 12 || s.shieldResists > 0 ? .energetic : .slightlyTired
     }

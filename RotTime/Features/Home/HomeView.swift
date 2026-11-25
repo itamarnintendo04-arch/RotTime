@@ -21,11 +21,11 @@ struct HomeView: View {
                     header
                     hero
                     PhoneTimeCard()
+                    ScreenTimeReportCard(kind: .today)
                     focusCard
                     quickActions
                     shieldCard
                     rewardCard
-                    ScreenTimeReportCard(kind: .today)
                 }
                 .padding(.horizontal, RTSpacing.l)
                 .padding(.bottom, MainTabView.tabBarClearance)
@@ -88,6 +88,8 @@ struct HomeView: View {
         case .energetic: t.append("I'm buzzing! Let's do something great.")
         case .slightlyTired: t.append("Yawn… a focus session would wake me up!")
         case .resting: t.append("Shhh… quiet hours. Rest is productive too.")
+        case .okay: t.append("Halfway through today's phone time. Pace yourself!")
+        case .verySick: t.append("Everything hurts… 🤕 We're way over your goal.")
         case .sick: t.append("Ugh… I feel sick from all that scrolling. 🤒 Focus with me?")
         case .recovered: t.append("Goal reached! I'm fully recharged ✨")
         }
@@ -124,6 +126,7 @@ struct HomeView: View {
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.regularMaterial))
+            BrainHealthMeter(health: app.brainHealth)
         }
     }
 
@@ -291,5 +294,37 @@ struct ActiveShieldRow: View {
                 Text("Strict").font(RTFont.caption(.bold)).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// "How the brain feels" bar: drains as phone time approaches (and passes) your goal.
+struct BrainHealthMeter: View {
+    var health: Double
+    @EnvironmentObject private var app: AppState
+
+    private var tint: Color {
+        health > 0.6 ? Color(hex: 0x3BAA66) : health > 0.33 ? Color(hex: 0xFF9A3C) : Color(hex: 0xE2505F)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: health > 0.6 ? "heart.fill" : health > 0.33 ? "heart.lefthalf.filled" : "heart.slash.fill")
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("\(app.brainName)'s health").font(RTFont.caption(.bold))
+                    Spacer()
+                    Text("\(Int((health * 100).rounded()))%").font(RTFont.caption(.heavy)).monospacedDigit().foregroundStyle(tint)
+                }
+                ProgressBar(progress: health, tint: tint, height: 8)
+                Text(app.isTrackingPhoneTime
+                     ? "Drops as your \(app.phoneMinutesToday.minutesText) of phone time gets closer to the \(app.phoneGoal.minutesText) you wanted."
+                     : "Choose what counts as phone time so \(app.brainName) can feel it.")
+                    .font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.regularMaterial))
+        .accessibilityElement(children: .combine)
     }
 }

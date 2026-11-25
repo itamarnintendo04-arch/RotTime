@@ -290,6 +290,8 @@ final class LocalBrainResponder: BrainResponder {
             case .energetic: bubbles.append("I'm feeling bright and bouncy. Shall we plan a focus session?")
             case .slightlyTired: bubbles.append("I'm a little sleepy — a focus session would wake me right up.")
             case .resting: bubbles.append("It's quiet hours. Rest well, and we'll go again tomorrow.")
+            case .okay: bubbles.append("I'm doing okay — about halfway through the phone time you wanted.")
+            case .verySick: bubbles.append("I feel really, really unwell… 🤕 We're way past your phone goal. Can we rest together?")
             case .sick: bubbles.append("I'm… not feeling great. 🤒 All that extra scrolling gave me a headache. One focus session would make me feel so much better.")
             }
             if c.streak > 0 { bubbles.append("Current streak: \(c.streak) day\(c.streak == 1 ? "" : "s") 🔥") }

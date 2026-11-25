@@ -65,9 +65,15 @@ struct FocusView: View {
 
     private func timerFace(now: Date) -> some View {
         let remaining = focus.remaining(at: now)
+        let countingUp = (focus.isIdle && focus.openEnded) || (focus.isOpenEnded && focus.phase == .focus)
+        let shown: TimeInterval = focus.isIdle ? (focus.openEnded ? 0 : TimeInterval(focus.focusMinutes * 60))
+            : (countingUp ? focus.elapsed(at: now) : remaining)
+        let best = app.longestFocusSeconds
         let label: String = {
             if focus.isPaused { return "Paused" }
             switch focus.phase {
+            case .focus where focus.isOpenEnded:
+                return best > 0 && focus.elapsed(at: now) > best ? "New record! Keep going 🔥" : "Focusing as long as you can"
             case .focus: return "Focusing"
             case .rest: return "Break time"
             case nil: return "Ready when you are"
@@ -83,12 +89,17 @@ struct FocusView: View {
             }
             .frame(width: 290, height: 290)
 
-            Text(focus.isIdle ? TimeInterval(focus.focusMinutes * 60).clock : remaining.clock)
+            Text(shown.clock)
                 .font(.system(size: 56, weight: .heavy, design: .rounded))
                 .monospacedDigit()
-                .contentTransition(.numericText(countsDown: true))
+                .contentTransition(.numericText(countsDown: !countingUp))
                 .foregroundStyle(app.theme.onBackground)
-                .animation(.snappy, value: Int(remaining))
+                .animation(.snappy, value: Int(shown))
+            if countingUp && best > 0 {
+                Label("Your record: \(best.shortDuration)", systemImage: "trophy.fill")
+                    .font(RTFont.caption(.bold))
+                    .foregroundStyle(app.theme.onBackground.opacity(0.85))
+            }
             Text(label)
                 .font(RTFont.label(.bold))
                 .foregroundStyle(app.theme.onBackground.opacity(0.8))
@@ -102,10 +113,14 @@ struct FocusView: View {
     @ViewBuilder
     private var controls: some View {
         if focus.isIdle {
-            PrimaryButton(title: "Start \(focus.focusMinutes)-min focus", symbol: "play.fill", theme: app.theme) {
+            PrimaryButton(title: focus.openEnded ? "Start — as long as I can" : "Start \(focus.focusMinutes)-min focus",
+                          symbol: focus.openEnded ? "infinity" : "play.fill", theme: app.theme) {
                 focus.startFocus()
             }
         } else {
+            if focus.isOpenEnded && focus.phase == .focus {
+                PrimaryButton(title: "I'm done", symbol: "flag.checkered", theme: app.theme) { focus.stop() }
+            }
             HStack(spacing: RTSpacing.m) {
                 if focus.isPaused {
                     PrimaryButton(title: "Resume", symbol: "play.fill", theme: app.theme) { focus.resume() }
@@ -114,7 +129,7 @@ struct FocusView: View {
                 }
                 if focus.phase == .rest {
                     SecondaryButton(title: "Skip break", symbol: "forward.fill", tint: app.theme.accent) { focus.stop() }
-                } else if focus.canPause || focus.isPaused {
+                } else if (focus.canPause || focus.isPaused) && !focus.isOpenEnded {
                     SecondaryButton(title: "End", symbol: "stop.fill", tint: Color(hex: 0xE2505F)) { confirmStop = true }
                 }
             }
@@ -133,8 +148,9 @@ struct FocusView: View {
             SectionHeader(title: "Session length", symbol: "timer")
             HStack(spacing: 8) {
                 ForEach(presets, id: \.1) { preset in
-                    Chip(title: "\(preset.0) \(preset.1)", symbol: preset.2, selected: focus.focusMinutes == preset.1 && !showCustom, tint: app.theme.accent) {
+                    Chip(title: "\(preset.0) \(preset.1)", symbol: preset.2, selected: focus.focusMinutes == preset.1 && !showCustom && !focus.openEnded, tint: app.theme.accent) {
                         showCustom = false
+                        focus.openEnded = false
                         focus.focusMinutes = preset.1
                         if preset.1 == 50 { focus.breakMinutes = 10 } else if preset.1 == 25 { focus.breakMinutes = 5 }
                         Haptics.selection(app.profile.hapticsEnabled)
@@ -142,12 +158,25 @@ struct FocusView: View {
                 }
             }
             .padding(.top, RTSpacing.s)
-            Chip(title: showCustom ? "Custom: \(Int(customMinutes)) min" : "Custom", symbol: "slider.horizontal.3",
-                 selected: showCustom || ![15, 25, 50].contains(focus.focusMinutes), tint: app.theme.accent) {
-                withAnimation(.snappy) { showCustom.toggle() }
-                customMinutes = Double(focus.focusMinutes)
+            HStack(spacing: 8) {
+                Chip(title: showCustom ? "Custom: \(Int(customMinutes)) min" : "Custom", symbol: "slider.horizontal.3",
+                     selected: !focus.openEnded && (showCustom || ![15, 25, 50].contains(focus.focusMinutes)), tint: app.theme.accent) {
+                    focus.openEnded = false
+                    withAnimation(.snappy) { showCustom.toggle() }
+                    customMinutes = Double(focus.focusMinutes)
+                }
+                Chip(title: "As long as I can", symbol: "infinity", selected: focus.openEnded, tint: app.theme.accent) {
+                    showCustom = false
+                    focus.openEnded = true
+                    Haptics.selection(app.profile.hapticsEnabled)
+                }
             }
             .padding(.top, 8)
+            if focus.openEnded {
+                Text("No timer — focus until you tap “I'm done”. Try to beat your record\(app.longestFocusSeconds > 0 ? " of \(app.longestFocusSeconds.shortDuration)" : "")!")
+                    .font(RTFont.caption(.medium)).foregroundStyle(.secondary)
+                    .padding(.top, 8)
+            }
             if showCustom {
                 VStack(alignment: .leading) {
                     Slider(value: $customMinutes, in: 5...180, step: 5) { Text("Minutes") }
@@ -209,10 +238,11 @@ struct FocusView: View {
                 Toggle(isOn: $focus.strict) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Strict session").font(RTFont.label(.semibold))
-                        Text("No pausing, no mindful unlocks while shielded.").font(RTFont.caption(.medium)).foregroundStyle(.secondary)
+                        Text(focus.openEnded ? "Not available for open-ended focus." : "No pausing and no extra time while shielded.")
+                            .font(RTFont.caption(.medium)).foregroundStyle(.secondary)
                     }
                 }
-                .disabled(!focus.isIdle)
+                .disabled(!focus.isIdle || focus.openEnded)
                 Toggle(isOn: $focus.autoStartBreak) {
                     Text("Start break automatically").font(RTFont.label(.semibold))
                 }
@@ -256,7 +286,7 @@ struct CelebrationView: View {
                 Text("Session complete!")
                     .font(RTFont.display(34))
                     .foregroundStyle(app.theme.onBackground)
-                Text("\(completion.minutes) minutes of real focus. \(app.brainName) is so proud of you.")
+                Text(completion.newRecord ? "\(completion.minutes) minutes — your longest focus ever! 🏆" : "\(completion.minutes) minutes of real focus. \(app.brainName) is so proud of you.")
                     .font(RTFont.body())
                     .multilineTextAlignment(.center)
                     .foregroundStyle(app.theme.onBackground.opacity(0.85))
