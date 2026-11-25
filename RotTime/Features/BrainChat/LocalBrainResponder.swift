@@ -89,21 +89,24 @@ final class LocalBrainResponder: BrainResponder {
 
         case .progress:
             var bubbles: [String] = []
-            if c.focusMinutesToday == 0 {
-                bubbles.append("No focus minutes yet today — and that's okay! Every streak starts at zero.")
-                bubbles.append("A single 25-minute session would get us \(min(100, Int(Double(25) / Double(max(1, c.goalMinutes)) * 100)))% of the way to your goal.")
-                return BrainReply(bubbles: bubbles, expression: .thinking, actions: [.startFocus25], quickReplies: ["Motivate me", "How does blocking work?"])
-            }
-            bubbles.append("Today: \(c.focusMinutesToday.minutesText) of focus across \(c.sessionsToday) session\(c.sessionsToday == 1 ? "" : "s").")
-            if c.goalLeft == 0 {
-                bubbles.append("Daily goal: DONE. I'm literally glowing right now. 🌟")
+            if c.phoneTracked {
+                if c.phoneMinutesToday > c.goalMinutes {
+                    bubbles.append("Phone time today: \(c.phoneMinutesToday.minutesText) — that's \((c.phoneMinutesToday - c.goalMinutes).minutesText) over the \(c.goalMinutes.minutesText) you wanted. 🤒")
+                    bubbles.append("I'm feeling pretty sick… Could we put the phone down for a while?")
+                } else {
+                    bubbles.append("Phone time today: \(c.phoneMinutesToday.minutesText) of the \(c.goalMinutes.minutesText) you wanted. \(c.goalLeft.minutesText) left.")
+                }
             } else {
-                bubbles.append("Only \(c.goalLeft.minutesText) to go until your \(c.goalMinutes.minutesText) goal.")
+                bubbles.append("You told me you want to be on your phone \(c.goalMinutes.minutesText) a day. Pick what counts as phone time in Settings and I'll keep count for you.")
+            }
+            if c.focusMinutesToday > 0 {
+                bubbles.append("Plus \(c.focusMinutesToday.minutesText) of focus across \(c.sessionsToday) session\(c.sessionsToday == 1 ? "" : "s"). 💪")
             }
             if c.resistsToday > 0 { bubbles.append("And you chose focus on a shield \(c.resistsToday) time\(c.resistsToday == 1 ? "" : "s"). That's real willpower!") }
             if c.streak > 1 { bubbles.append("Streak: \(c.streak) days 🔥") }
-            return BrainReply(bubbles: bubbles, expression: c.goalLeft == 0 ? .proud : .happy,
-                              actions: c.goalLeft == 0 ? [.openStats] : [.startFocus25, .openStats],
+            let over = c.phoneTracked && c.phoneMinutesToday > c.goalMinutes
+            return BrainReply(bubbles: bubbles, expression: over ? .sick : .happy,
+                              actions: over ? [.startFocus25, .openBlocking] : [.openStats],
                               quickReplies: ["Thanks!", "What about my streak?", "I need a break"])
 
         case .motivation:
@@ -157,8 +160,10 @@ final class LocalBrainResponder: BrainResponder {
                               expression: .celebrating, quickReplies: ["How am I doing?", "What can I unlock?"])
 
         case .goal:
-            return BrainReply(bubbles: ["Your daily goal is \(c.goalMinutes.minutesText) of focus.", c.goalLeft == 0 ? "And you've already hit it today!" : "\(c.goalLeft.minutesText) left today. You can change the goal in Settings anytime."],
-                              expression: .proud, actions: c.goalLeft == 0 ? [] : [.startFocus25], quickReplies: ["How am I doing?", "Motivate me"])
+            return BrainReply(bubbles: ["You want to be on your phone \(c.goalMinutes.minutesText) a day.",
+                                        c.phoneTracked ? (c.goalLeft == 0 ? "You've used all of it today… 🤒 Every extra minute makes me feel worse." : "\(c.goalLeft.minutesText) left today. You can change the goal in Settings anytime.")
+                                                       : "Choose what counts as phone time in Settings and I'll track it for you."],
+                              expression: c.phoneTracked && c.goalLeft == 0 ? .sad : .proud, actions: [.openStats], quickReplies: ["How am I doing?", "Motivate me"])
 
         case .rewards:
             return BrainReply(bubbles: ["Everything is earned by focusing — no shops, no random boxes.", "You have \(c.points) spark points. Each focus minute is a point, and achievements give bonuses that unlock themes, hats and effects."],
@@ -292,7 +297,7 @@ final class LocalBrainResponder: BrainResponder {
                               actions: c.state == .resting ? [] : [.startFocus25],
                               quickReplies: ["How am I doing?", "Motivate me", "What can you do?"])
         case .focusCompleted(let minutes):
-            return BrainReply(bubbles: ["WOOHOO! \(minutes) minutes of focus! 🎉", c.goalLeft == 0 ? "That completes your daily goal. I'm overflowing with sparks!" : "Only \(c.goalLeft.minutesText) left for today's goal. Take a breather first."],
+            return BrainReply(bubbles: ["WOOHOO! \(minutes) minutes of focus! 🎉", "I feel so much better — focusing heals me. Take a breather first."],
                               expression: .celebrating, actions: [.startBreak5, .openStats], quickReplies: ["Thanks!", "How am I doing?"])
         case .shieldResisted(let count):
             return BrainReply(bubbles: ["I saw that! You chose focus on the shield \(count == 1 ? "just now" : "\(count) times"). 💪", "That's the hardest part, and you did it."],
@@ -301,6 +306,10 @@ final class LocalBrainResponder: BrainResponder {
             return BrainReply(bubbles: ["\(name) is on. I'll stand guard at the door. 🛡️"], expression: .focused)
         case .streakMilestone(let days):
             return BrainReply(bubbles: ["\(days)-DAY STREAK! 🔥🔥🔥", "Consistency is a superpower and you have it."], expression: .celebrating, actions: [.openCustomize])
+        case .phoneGoalReached:
+            return BrainReply(bubbles: ["You've used the \(c.goalMinutes.minutesText) of phone time you wanted today. 😵‍💫",
+                                        "From here on, every minute makes me feel a little sicker… Want to do something offline with me?"],
+                              expression: .sad, actions: [.startFocus25, .openBlocking], quickReplies: ["Okay, I'll stop", "Just a bit more"])
         case .goalReached:
             return BrainReply(bubbles: ["Daily goal reached! 🌟 I'm fully recharged."], expression: .proud, actions: [.openStats])
         }

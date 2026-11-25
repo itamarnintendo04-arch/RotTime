@@ -176,18 +176,18 @@ enum BrainState: String, Codable {
         case .energetic: return "Energetic"
         case .slightlyTired: return "A little sleepy"
         case .resting: return "Resting"
-        case .recovered: return "Fully recharged"
+        case .recovered: return "Glowing"
         case .sick: return "Feeling sick"
         }
     }
 
     var caption: String {
         switch self {
-        case .energetic: return "Buzzing with ideas. Great time for a focus session!"
-        case .slightlyTired: return "Could use a little focus time to warm up."
+        case .energetic: return "Plenty of phone time left and a clear head. Let's keep it that way!"
+        case .slightlyTired: return "Getting close to your phone goal… maybe put it down for a bit?"
         case .resting: return "Winding down. Rest is part of the plan."
-        case .recovered: return "Daily goal reached — the brain is glowing!"
-        case .sick: return "Too much scrolling made me feel awful. A focus session would heal me."
+        case .recovered: return "Under your phone goal and you focused today — glowing!"
+        case .sick: return "Too much phone time made me feel awful. A focus session would heal me."
         }
     }
 

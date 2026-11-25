@@ -35,7 +35,7 @@ enum Requirement: Equatable {
         case .resists(let n): return "Choose focus on a shield \(n) times"
         case .blockSessions(let n): return "Run \(n) blocking sessions"
         case .chats(let n): return "Send \(SharedStore.brainName) \(n) messages"
-        case .goalDays(let n): return "Hit your daily goal on \(n) days"
+        case .goalDays(let n): return "Stay under your phone-time goal on \(n) days"
         }
     }
 
@@ -179,7 +179,7 @@ struct Achievement: Identifiable {
                     requirement: .chats(10), bonusPoints: 25, unlocksExpression: .love),
         Achievement(id: "ten-sessions", title: "Deep Diver", detail: "Complete 10 focus sessions.", symbol: "water.waves",
                     requirement: .sessions(10), bonusPoints: 80, unlocksExpression: nil),
-        Achievement(id: "goal-3", title: "Goal Getter", detail: "Reach your daily goal on 3 days.", symbol: "target",
+        Achievement(id: "goal-3", title: "Goal Getter", detail: "Stay under your phone-time goal on 3 days.", symbol: "target",
                     requirement: .goalDays(3), bonusPoints: 60, unlocksExpression: nil),
         Achievement(id: "blocker-5", title: "Shield Smith", detail: "Run 5 blocking sessions.", symbol: "lock.shield.fill",
                     requirement: .blockSessions(5), bonusPoints: 50, unlocksExpression: nil),

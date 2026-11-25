@@ -176,3 +176,22 @@ final class InterventionTests: XCTestCase {
         XCTAssertGreaterThan(BrainExpression.hurt.face(style: .classic).bandage, 0)
     }
 }
+
+final class PhoneTimeTests: XCTestCase {
+    func testUsageStepsIncludeGoalAndGoPastIt() {
+        let steps = ActivityScheduler.usageSteps(goal: 95)
+        XCTAssertTrue(steps.contains(95))
+        XCTAssertEqual(steps.first, 10)
+        XCTAssertGreaterThanOrEqual(steps.last ?? 0, 190)
+        XCTAssertEqual(steps, steps.sorted())
+        XCTAssertLessThanOrEqual(ActivityScheduler.usageSteps(goal: 720).count, 100)
+    }
+
+    func testOldProfileStillDecodes() throws {
+        let old = #"{"userName":"Sam","brainName":"Noodle","dailyGoalMinutes":60,"weeklyGoalMinutes":300,"onboardingComplete":true,"hapticsEnabled":true,"ambientAnimations":true,"checkInReminderEnabled":false,"checkInHour":9,"checkInMinute":0,"themeID":"space"}"#
+        let profile = try JSONDecoder().decode(UserProfile.self, from: Data(old.utf8))
+        XCTAssertTrue(profile.onboardingComplete)
+        XCTAssertEqual(profile.themeID, "space")
+        XCTAssertEqual(profile.phoneGoalMinutes, 120)
+    }
+}

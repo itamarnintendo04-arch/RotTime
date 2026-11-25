@@ -18,6 +18,8 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
                                                    selection: mode.selection, strict: mode.strict, endsAt: end))
             SharedStore.updateToday { $0.blockSessions += 1 }
             SharedStore.appendExtensionEvent(ExtensionEvent(kind: .scheduleStarted, detail: mode.name))
+        } else if name == ActivityScheduler.usageActivity {
+            SharedStore.updateToday { $0.usageTracked = true }
         } else if name == ActivityScheduler.focusActivity {
             // The app already applied the focus shield; re-assert it in case the store was reset.
             ShieldController.reapplyAll()
@@ -55,6 +57,10 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
     override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name, activity: DeviceActivityName) {
         super.eventDidReachThreshold(event, activity: activity)
+        if activity.rawValue == ActivityScheduler.usageActivity {
+            recordUsage(event)
+            return
+        }
         guard let id = ActivityScheduler.modeID(fromActivity: activity.rawValue),
               let mode = SharedStore.blockModes.first(where: { $0.id == id }) else { return }
         let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(24 * 3600)
@@ -69,6 +75,30 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
 
     override func intervalWillEndWarning(for activity: DeviceActivityName) {
         super.intervalWillEndWarning(for: activity)
+    }
+
+    // MARK: Phone time
+
+    private func recordUsage(_ event: DeviceActivityEvent.Name) {
+        guard event.rawValue.hasPrefix("u."), let minutes = Int(event.rawValue.dropFirst(2)) else { return }
+        SharedStore.updateToday { s in
+            s.usageTracked = true
+            s.phoneMinutes = max(s.phoneMinutes, minutes)
+        }
+        let goal = SharedStore.phoneGoalMinutes
+        let brain = SharedStore.brainName
+        if minutes == goal {
+            SharedStore.appendExtensionEvent(ExtensionEvent(kind: .phoneGoalReached))
+            notify(title: "\(brain) is starting to feel dizzy 😵‍💫",
+                   body: "You've reached the \(Self.format(goal)) you wanted to spend on your phone today.")
+        } else if minutes > goal, (minutes - goal) % 30 == 0 {
+            notify(title: "\(brain) feels sick 🤒",
+                   body: "\(Self.format(minutes)) on your phone today — \(Self.format(minutes - goal)) over your goal.")
+        }
+    }
+
+    private static func format(_ minutes: Int) -> String {
+        minutes >= 60 ? (minutes % 60 == 0 ? "\(minutes / 60)h" : "\(minutes / 60)h \(minutes % 60)m") : "\(minutes)m"
     }
 
     // MARK: Helpers

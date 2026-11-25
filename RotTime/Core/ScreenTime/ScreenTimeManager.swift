@@ -80,6 +80,11 @@ final class ScreenTimeManager: ObservableObject {
     // MARK: State
 
     func refresh() {
+        // Make sure tracking survives reinstalls / revoked monitors.
+        if isAuthorized, SharedStore.usageTrackingConfigured,
+           !ActivityScheduler.monitoredActivityNames.contains(ActivityScheduler.usageActivity) {
+            startUsageTracking()
+        }
         ShieldController.reapplyAll()
         activeShields = SharedStore.activeShields
         modes = SharedStore.blockModes
@@ -230,6 +235,28 @@ final class ScreenTimeManager: ObservableObject {
             ActivityScheduler.stop(name: ActivityScheduler.manualActivityName(for: mode))
         }
         activeShields = SharedStore.activeShields
+    }
+
+    // MARK: Phone-time tracking
+
+    @Published private(set) var usageSelection: FamilyActivitySelection = SharedStore.usageSelection
+
+    /// Saves what counts as "phone time" and starts threshold tracking.
+    func setUsageSelection(_ selection: FamilyActivitySelection) {
+        usageSelection = selection
+        SharedStore.usageSelection = selection
+        startUsageTracking()
+    }
+
+    func startUsageTracking() {
+        guard isAuthorized, SharedStore.usageTrackingConfigured else { return }
+        do {
+            try ActivityScheduler.registerUsageTracking(selection: SharedStore.usageSelection, goal: SharedStore.phoneGoalMinutes)
+            SharedStore.updateToday { $0.usageTracked = true }
+            AppState.shared.refreshShared()
+        } catch {
+            errorMessage = "Couldn't start phone-time tracking: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
+        }
     }
 
     // MARK: Focus timer integration

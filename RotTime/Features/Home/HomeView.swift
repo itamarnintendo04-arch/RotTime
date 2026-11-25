@@ -20,6 +20,7 @@ struct HomeView: View {
                 VStack(spacing: RTSpacing.l) {
                     header
                     hero
+                    PhoneTimeCard()
                     focusCard
                     quickActions
                     shieldCard
@@ -130,21 +131,16 @@ struct HomeView: View {
 
     private var focusCard: some View {
         Card {
-            HStack(spacing: RTSpacing.l) {
-                ZStack {
-                    ProgressRing(progress: app.todayGoalProgress, lineWidth: 12, gradient: app.theme.ringGradient)
-                    VStack(spacing: 0) {
-                        Text("\(Int(app.todayGoalProgress * 100))%").font(RTFont.title(20)).monospacedDigit()
-                        Text("goal").font(RTFont.caption()).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 92, height: 92)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Today's focus").font(RTFont.caption()).foregroundStyle(.secondary)
-                    Text("\(app.todayFocusMinutes.minutesText) / \(app.profile.dailyGoalMinutes.minutesText)")
-                        .font(RTFont.title(22)).monospacedDigit()
-                    Text("\(app.today.focusSessions) session\(app.today.focusSessions == 1 ? "" : "s") · \(app.today.breaks) break\(app.today.breaks == 1 ? "" : "s")")
-                        .font(RTFont.caption(.medium)).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Image(systemName: "timer")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(app.theme.buttonGradient))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Focus today").font(RTFont.caption()).foregroundStyle(.secondary)
+                    Text("\(app.todayFocusMinutes.minutesText) · \(app.today.focusSessions) session\(app.today.focusSessions == 1 ? "" : "s")")
+                        .font(RTFont.title(18)).monospacedDigit()
                 }
                 Spacer(minLength: 0)
             }

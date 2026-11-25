@@ -38,7 +38,9 @@ final class ChatEngineStore: ObservableObject {
             userName: app.profile.userName,
             brainName: app.brainName,
             focusMinutesToday: app.todayFocusMinutes,
-            goalMinutes: app.profile.dailyGoalMinutes,
+            goalMinutes: app.phoneGoal,
+            phoneMinutesToday: app.phoneMinutesToday,
+            phoneTracked: app.isTrackingPhoneTime,
             sessionsToday: app.today.focusSessions,
             streak: app.currentStreak,
             resistsToday: app.today.shieldResists,
@@ -84,6 +86,7 @@ final class ChatEngineStore: ObservableObject {
     func ingestExtensionEvents(_ events: [ExtensionEvent]) {
         let resisted = events.filter { $0.kind == .shieldResisted }.count
         if resisted > 0 { postEvent(.shieldResisted(count: resisted)) }
+        if events.contains(where: { $0.kind == .phoneGoalReached }) { postEvent(.phoneGoalReached) }
     }
 
     func clearHistory() {

@@ -1,3 +1,4 @@
+import FamilyControls
 import SwiftUI
 
 struct SettingsView: View {
@@ -8,6 +9,7 @@ struct SettingsView: View {
     @State private var confirmReset = false
     @State private var confirmRevoke = false
     @State private var showCustomize = false
+    @State private var showUsagePicker = false
 
     private var reminderTime: Binding<Date> {
         Binding(get: { ModeEditorView.date(app.profile.checkInHour, app.profile.checkInMinute) },
@@ -26,13 +28,22 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Stepper(value: $app.profile.dailyGoalMinutes, in: 10...600, step: 5) {
-                        LabeledContent("Daily focus goal", value: app.profile.dailyGoalMinutes.minutesText)
+                    Stepper(value: $app.profile.phoneGoalMinutes, in: 15...720, step: 15) {
+                        LabeledContent("I want to be on my phone", value: "\(app.profile.phoneGoalMinutes.minutesText)/day")
                     }
-                    Stepper(value: $app.profile.weeklyGoalMinutes, in: 30...4200, step: 30) {
-                        LabeledContent("Weekly focus goal", value: app.profile.weeklyGoalMinutes.minutesText)
+                    Stepper(value: $app.profile.phoneEstimateMinutes, in: 15...960, step: 15) {
+                        LabeledContent("I usually spend", value: "\(app.profile.phoneEstimateMinutes.minutesText)/day")
                     }
-                } header: { Text("Goals") }
+                    Button { showUsagePicker = true } label: {
+                        Label(SharedStore.usageTrackingConfigured ? "Change what counts as phone time" : "Choose what counts as phone time",
+                              systemImage: "square.grid.2x2")
+                    }
+                    .disabled(!screenTime.isAuthorized)
+                } header: {
+                    Text("Phone time")
+                } footer: {
+                    Text("Screen Time tells \(app.brainName) each time you pass another 10 minutes, so the brain knows how much of your day is gone — and gets sick when you go over.")
+                }
 
                 Section {
                     LabeledContent("Status", value: screenTime.statusText)
@@ -101,6 +112,9 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.fontWeight(.bold) } }
             .sheet(isPresented: $showCustomize) { CustomizationView() }
+            .familyActivityPicker(isPresented: $showUsagePicker, selection: Binding(
+                get: { screenTime.usageSelection },
+                set: { screenTime.setUsageSelection($0) }))
             .confirmationDialog("Reset everything?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Reset", role: .destructive) {
                     app.resetAllData()

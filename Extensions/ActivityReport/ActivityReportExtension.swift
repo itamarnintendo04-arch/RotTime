@@ -61,6 +61,13 @@ struct TotalActivityReport: DeviceActivityReportScene {
 struct TotalActivityView: View {
     let summary: ActivitySummary
 
+    /// The goal the user set in RotTime (read-only access to the shared App Group).
+    private var goalMinutes: Int {
+        let group = (Bundle.main.object(forInfoDictionaryKey: "RTAppGroupIdentifier") as? String) ?? "group.com.rottime.app"
+        let v = UserDefaults(suiteName: group)?.integer(forKey: "rt.phoneGoalMinutes") ?? 0
+        return v > 0 ? v : 120
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
@@ -76,6 +83,23 @@ struct TotalActivityView: View {
                     Text("Pickups").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     Text("\(summary.pickups)").font(.system(.title3, design: .rounded).weight(.bold))
                 }
+            }
+            let goal = TimeInterval(goalMinutes * 60)
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geo in
+                    Capsule().fill(Color.primary.opacity(0.08))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(summary.total > goal ? Color(red: 0.89, green: 0.31, blue: 0.37) : Color(red: 1, green: 0.48, blue: 0.62))
+                                .frame(width: max(8, geo.size.width * min(1, summary.total / max(goal, 1))))
+                        }
+                }
+                .frame(height: 12)
+                Text(summary.total > goal
+                     ? "\(format(summary.total - goal)) over the \(format(goal)) you wanted"
+                     : "\(format(goal - summary.total)) left of the \(format(goal)) you wanted")
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
             if summary.apps.isEmpty {
                 Text("No app activity recorded yet today.")

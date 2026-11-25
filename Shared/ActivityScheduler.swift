@@ -8,6 +8,42 @@ public enum ActivityScheduler {
     public static let focusActivity = "rt.focus"
     public static let instantActivity = "rt.instant"
     public static let relockActivity = "rt.relock"
+    public static let usageActivity = "rt.usage"
+
+    /// Threshold steps (minutes) reported to the monitor for phone-time tracking.
+    public static func usageSteps(goal: Int) -> [Int] {
+        let top = min(16 * 60, max(goal * 2, goal + 120))
+        var steps = Set(stride(from: 10, through: top, by: 10))
+        steps.insert(goal)
+        return Array(steps).sorted().prefix(100).map { $0 }
+    }
+
+    /// Tracks today's phone time in 10-minute steps via DeviceActivity threshold events.
+    /// The monitor extension writes each reached step into the shared DayStats.
+    public static func registerUsageTracking(selection: FamilyActivitySelection, goal: Int) throws {
+        stop(name: usageActivity)
+        guard !(selection.applicationTokens.isEmpty && selection.categoryTokens.isEmpty && selection.webDomainTokens.isEmpty) else { return }
+        var events: [DeviceActivityEvent.Name: DeviceActivityEvent] = [:]
+        for minutes in usageSteps(goal: goal) {
+            let threshold = DateComponents(minute: minutes)
+            let event: DeviceActivityEvent
+            if #available(iOS 17.4, *) {
+                event = DeviceActivityEvent(applications: selection.applicationTokens, categories: selection.categoryTokens,
+                                            webDomains: selection.webDomainTokens, threshold: threshold, includesPastActivity: true)
+            } else {
+                event = DeviceActivityEvent(applications: selection.applicationTokens, categories: selection.categoryTokens,
+                                            webDomains: selection.webDomainTokens, threshold: threshold)
+            }
+            events[DeviceActivityEvent.Name(rawValue: "u.\(minutes)")] = event
+        }
+        let schedule = DeviceActivitySchedule(intervalStart: DateComponents(hour: 0, minute: 0),
+                                              intervalEnd: DateComponents(hour: 23, minute: 59), repeats: true)
+        do {
+            try center.startMonitoring(DeviceActivityName(rawValue: usageActivity), during: schedule, events: events)
+        } catch {
+            throw SchedulerError.system(error)
+        }
+    }
 
     static var center: DeviceActivityCenter { DeviceActivityCenter() }
 

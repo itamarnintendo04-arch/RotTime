@@ -1,3 +1,4 @@
+import FamilyControls
 import SwiftUI
 
 struct OnboardingView: View {
@@ -6,16 +7,19 @@ struct OnboardingView: View {
     @State private var page = 0
     @State private var name = ""
     @State private var brainName = "Noodle"
-    @State private var goal = 60
+    @State private var phoneNow = 240
+    @State private var phoneGoal = 120
     @State private var poke = false
+    @State private var showUsagePicker = false
 
-    private let pages = 4
+    private let pages = 5
 
     private var expression: BrainExpression {
         switch page {
         case 0: return poke ? .surprised : .happy
         case 1: return .focused
         case 2: return .love
+        case 3: return phoneNow > phoneGoal * 2 ? .tired : .thinking
         default: return screenTime.isAuthorized ? .celebrating : .thinking
         }
     }
@@ -35,7 +39,7 @@ struct OnboardingView: View {
 
                 Spacer(minLength: 0)
                 BrainCharacterView(expression: expression,
-                                   appearance: BrainAppearance(hat: page == 1 ? .headphones : .none, effect: page == 3 ? .sparkles : .none),
+                                   appearance: BrainAppearance(hat: page == 1 ? .headphones : .none, effect: page == 4 ? .sparkles : .none),
                                    size: 240)
                     .onTapGesture {
                         poke = true
@@ -48,6 +52,7 @@ struct OnboardingView: View {
                     case 0: intro
                     case 1: howItWorks
                     case 2: personalize
+                    case 3: phoneTime
                     default: permissions
                     }
                 }
@@ -99,18 +104,38 @@ struct OnboardingView: View {
                 .textContentType(.givenName)
             TextField("Name your brain", text: $brainName)
                 .textFieldStyle(.roundedBorder)
-            Stepper(value: $goal, in: 10...480, step: 5) {
-                VStack(alignment: .leading) {
-                    Text("Daily focus goal").font(RTFont.label(.semibold))
-                    Text(goal.minutesText).font(RTFont.title(20))
+        }
+    }
+
+    private var phoneTime: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Your phone time").font(RTFont.display(26))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("How much are you on your phone right now, per day?").font(RTFont.label(.semibold))
+                Stepper(value: $phoneNow, in: 15...960, step: 15) {
+                    Text(phoneNow.minutesText).font(RTFont.title(22)).monospacedDigit()
                 }
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("How much do you *want* to be on it?").font(RTFont.label(.semibold))
+                Stepper(value: $phoneGoal, in: 15...720, step: 15) {
+                    Text(phoneGoal.minutesText).font(RTFont.title(22)).monospacedDigit()
+                }
+            }
+            let saved = max(0, phoneNow - phoneGoal)
+            if saved > 0 {
+                Label("That's \(Int((Double(saved) * 365 / 60 / 24).rounded())) days a year back for your life. \(brainName.isEmpty ? "Noodle" : brainName) will help.",
+                      systemImage: "sparkles")
+                    .font(RTFont.caption(.semibold))
+                    .foregroundStyle(Color(hex: 0xFF5F8F))
+            }
         }
+        .onChange(of: phoneNow) { _, now in if phoneGoal > now { phoneGoal = now } }
     }
 
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Two quick permissions").font(RTFont.display(26))
+            Text("Let's connect").font(RTFont.display(26))
             Button {
                 Task { await screenTime.requestAuthorization() }
             } label: {
@@ -119,6 +144,19 @@ struct OnboardingView: View {
                               done: screenTime.isAuthorized)
             }
             .buttonStyle(.plain)
+            Button {
+                showUsagePicker = true
+            } label: {
+                PermissionRow(symbol: "square.grid.2x2.fill", title: "What counts as phone time",
+                              detail: "Tap “All Apps & Categories” so \(brainName.isEmpty ? "Noodle" : brainName) can see how much you've used.",
+                              done: screenTime.isAuthorized && SharedStore.usageTrackingConfigured)
+            }
+            .buttonStyle(.plain)
+            .disabled(!screenTime.isAuthorized)
+            .opacity(screenTime.isAuthorized ? 1 : 0.5)
+            .familyActivityPicker(isPresented: $showUsagePicker, selection: Binding(
+                get: { screenTime.usageSelection },
+                set: { app.profile.phoneGoalMinutes = phoneGoal; screenTime.setUsageSelection($0) }))
             Button {
                 Task { _ = await NotificationManager.requestAuthorization() }
             } label: {
@@ -134,8 +172,9 @@ struct OnboardingView: View {
         app.profile.userName = name.trimmingCharacters(in: .whitespaces)
         let trimmed = brainName.trimmingCharacters(in: .whitespaces)
         app.profile.brainName = trimmed.isEmpty ? "Noodle" : trimmed
-        app.profile.dailyGoalMinutes = goal
-        app.profile.weeklyGoalMinutes = goal * 5
+        app.profile.phoneEstimateMinutes = phoneNow
+        app.profile.phoneGoalMinutes = phoneGoal
+        screenTime.startUsageTracking()
         app.profile.onboardingComplete = true
         AppGroup.defaults.set(DayKey.string(for: Date()), forKey: ChatStore.dailyKey)
         ChatEngineStore.shared.postEvent(.dailyWelcome)

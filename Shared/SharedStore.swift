@@ -1,4 +1,5 @@
 import Foundation
+import FamilyControls
 
 /// Identifiers shared by the app and every Screen Time extension.
 ///
@@ -31,6 +32,8 @@ public enum SharedStore {
         case brainName = "rt.brainName"
         case extensionEvents = "rt.extensionEvents"
         case moreTimeRequests = "rt.moreTimeRequests"
+        case phoneGoalMinutes = "rt.phoneGoalMinutes"
+        case usageSelection = "rt.usageSelection"
     }
 
     private static let encoder = JSONEncoder()
@@ -71,6 +74,23 @@ public enum SharedStore {
     public static var brainName: String {
         get { AppGroup.defaults.string(forKey: Key.brainName.rawValue) ?? "Noodle" }
         set { AppGroup.defaults.set(newValue, forKey: Key.brainName.rawValue) }
+    }
+
+    /// How long the user *wants* to spend on their phone per day.
+    public static var phoneGoalMinutes: Int {
+        get { let v = AppGroup.defaults.integer(forKey: Key.phoneGoalMinutes.rawValue); return v > 0 ? v : 120 }
+        set { AppGroup.defaults.set(newValue, forKey: Key.phoneGoalMinutes.rawValue) }
+    }
+
+    /// What counts as "phone time" (ideally every category), chosen in Apple's picker.
+    public static var usageSelection: FamilyActivitySelection {
+        get { load(FamilyActivitySelection.self, .usageSelection, default: FamilyActivitySelection()) }
+        set { save(newValue, .usageSelection) }
+    }
+
+    public static var usageTrackingConfigured: Bool {
+        let s = usageSelection
+        return !(s.applicationTokens.isEmpty && s.categoryTokens.isEmpty && s.webDomainTokens.isEmpty)
     }
 
     public static var selectedThemeID: String {
@@ -150,11 +170,15 @@ public struct DayStats: Codable, Equatable {
     public var moreTimeDeclined: Int = 0
     /// Total extra minutes granted on shielded apps.
     public var extraMinutes: Int = 0
+    /// Phone time so far, as reported by DeviceActivity thresholds (10-minute steps).
+    public var phoneMinutes: Int = 0
+    /// Whether phone-time tracking was running that day.
+    public var usageTracked: Bool = false
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case focusSeconds, focusSessions, breaks, blockSessions, shieldResists, mindfulUnlocks, chatMessages, moreTimeDeclined, extraMinutes
+        case focusSeconds, focusSessions, breaks, blockSessions, shieldResists, mindfulUnlocks, chatMessages, moreTimeDeclined, extraMinutes, phoneMinutes, usageTracked
     }
 
     // Tolerant decoding so stats saved by older versions keep loading.
@@ -169,6 +193,8 @@ public struct DayStats: Codable, Equatable {
         chatMessages = try c.decodeIfPresent(Int.self, forKey: .chatMessages) ?? 0
         moreTimeDeclined = try c.decodeIfPresent(Int.self, forKey: .moreTimeDeclined) ?? 0
         extraMinutes = try c.decodeIfPresent(Int.self, forKey: .extraMinutes) ?? 0
+        phoneMinutes = try c.decodeIfPresent(Int.self, forKey: .phoneMinutes) ?? 0
+        usageTracked = try c.decodeIfPresent(Bool.self, forKey: .usageTracked) ?? false
     }
 
     public var focusMinutes: Int { Int(focusSeconds / 60) }
@@ -176,7 +202,7 @@ public struct DayStats: Codable, Equatable {
 
 public struct ExtensionEvent: Codable, Equatable {
     public enum Kind: String, Codable {
-        case shieldResisted, mindfulUnlock, moreTimeRequested, scheduleStarted, scheduleEnded, focusEnded, limitReached
+        case shieldResisted, mindfulUnlock, moreTimeRequested, phoneGoalReached, scheduleStarted, scheduleEnded, focusEnded, limitReached
     }
     public var kind: Kind
     public var date: Date

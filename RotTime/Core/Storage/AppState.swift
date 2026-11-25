@@ -4,8 +4,13 @@ import SwiftUI
 struct UserProfile: Codable, Equatable {
     var userName: String = ""
     var brainName: String = "Noodle"
+    /// Legacy focus goals (no longer shown; kept so old data decodes).
     var dailyGoalMinutes: Int = 60
     var weeklyGoalMinutes: Int = 300
+    /// How much the user *wants* to be on their phone each day.
+    var phoneGoalMinutes: Int = 120
+    /// How much the user said they currently spend per day (asked in onboarding).
+    var phoneEstimateMinutes: Int = 240
     var onboardingComplete = false
     var hapticsEnabled = true
     var ambientAnimations = true
@@ -13,6 +18,32 @@ struct UserProfile: Codable, Equatable {
     var checkInHour = 9
     var checkInMinute = 0
     var themeID: String = "cozy"
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case userName, brainName, dailyGoalMinutes, weeklyGoalMinutes, phoneGoalMinutes, phoneEstimateMinutes
+        case onboardingComplete, hapticsEnabled, ambientAnimations, checkInReminderEnabled, checkInHour, checkInMinute, themeID
+    }
+
+    // Tolerant decoding so profiles saved by earlier versions keep working.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = UserProfile()
+        userName = try c.decodeIfPresent(String.self, forKey: .userName) ?? d.userName
+        brainName = try c.decodeIfPresent(String.self, forKey: .brainName) ?? d.brainName
+        dailyGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .dailyGoalMinutes) ?? d.dailyGoalMinutes
+        weeklyGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .weeklyGoalMinutes) ?? d.weeklyGoalMinutes
+        phoneGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .phoneGoalMinutes) ?? d.phoneGoalMinutes
+        phoneEstimateMinutes = try c.decodeIfPresent(Int.self, forKey: .phoneEstimateMinutes) ?? d.phoneEstimateMinutes
+        onboardingComplete = try c.decodeIfPresent(Bool.self, forKey: .onboardingComplete) ?? d.onboardingComplete
+        hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? d.hapticsEnabled
+        ambientAnimations = try c.decodeIfPresent(Bool.self, forKey: .ambientAnimations) ?? d.ambientAnimations
+        checkInReminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .checkInReminderEnabled) ?? d.checkInReminderEnabled
+        checkInHour = try c.decodeIfPresent(Int.self, forKey: .checkInHour) ?? d.checkInHour
+        checkInMinute = try c.decodeIfPresent(Int.self, forKey: .checkInMinute) ?? d.checkInMinute
+        themeID = try c.decodeIfPresent(String.self, forKey: .themeID) ?? d.themeID
+    }
 }
 
 struct RewardProgress: Codable, Equatable {
@@ -76,6 +107,13 @@ final class AppState: ObservableObject {
     private func syncShared() {
         SharedStore.brainName = profile.brainName
         SharedStore.selectedThemeID = profile.themeID
+        if SharedStore.phoneGoalMinutes != profile.phoneGoalMinutes {
+            SharedStore.phoneGoalMinutes = profile.phoneGoalMinutes
+            // Thresholds depend on the goal, so re-register tracking.
+            if SharedStore.usageTrackingConfigured {
+                try? ActivityScheduler.registerUsageTracking(selection: SharedStore.usageSelection, goal: profile.phoneGoalMinutes)
+            }
+        }
     }
 
     var theme: Theme { Theme.with(id: profile.themeID) }
@@ -94,9 +132,19 @@ final class AppState: ObservableObject {
     var today: DayStats { stats(for: Date()) }
 
     var todayFocusMinutes: Int { today.focusMinutes }
-    var todayGoalProgress: Double {
-        profile.dailyGoalMinutes == 0 ? 0 : min(1, Double(today.focusMinutes) / Double(profile.dailyGoalMinutes))
-    }
+    // MARK: Phone time
+
+    var phoneGoal: Int { max(1, profile.phoneGoalMinutes) }
+    /// Phone time so far today (10-minute steps reported by Screen Time).
+    var phoneMinutesToday: Int { today.phoneMinutes }
+    var isTrackingPhoneTime: Bool { SharedStore.usageTrackingConfigured }
+    /// Can exceed 1 when over the goal.
+    var phoneProgress: Double { Double(phoneMinutesToday) / Double(phoneGoal) }
+    var phoneMinutesLeft: Int { max(0, phoneGoal - phoneMinutesToday) }
+    var isOverPhoneGoal: Bool { isTrackingPhoneTime && phoneMinutesToday > phoneGoal }
+
+    /// Kept for older callers: how far through today's phone budget we are (0…1).
+    var todayGoalProgress: Double { min(1, phoneProgress) }
 
     func recordFocus(seconds: Double, kind: FocusRecord.Kind, completed: Bool, label: String, start: Date) {
         guard seconds >= 30 else { return }
@@ -161,7 +209,7 @@ final class AppState: ObservableObject {
     var snapshot: ProgressSnapshot {
         let all = dayStats.values
         let focusMinutes = Int(all.reduce(0) { $0 + $1.focusSeconds } / 60)
-        let goal = max(1, profile.dailyGoalMinutes)
+        let goal = phoneGoal
         return ProgressSnapshot(
             totalFocusMinutes: focusMinutes,
             totalSessions: all.reduce(0) { $0 + $1.focusSessions },
@@ -171,7 +219,7 @@ final class AppState: ObservableObject {
             totalResists: all.reduce(0) { $0 + $1.shieldResists },
             totalBlockSessions: all.reduce(0) { $0 + $1.blockSessions },
             chatMessages: all.reduce(0) { $0 + $1.chatMessages },
-            goalDays: all.filter { $0.focusMinutes >= goal }.count
+            goalDays: dayStats.filter { $0.key != DayKey.string(for: Date()) && $0.value.usageTracked && $0.value.phoneMinutes <= goal }.count
         )
     }
 
@@ -246,12 +294,15 @@ final class AppState: ObservableObject {
     /// Derived only from things RotTime measured itself.
     func brainState(now: Date = Date(), sleepActive: Bool) -> BrainState {
         let hour = Calendar.current.component(.hour, from: now)
-        if BrainHealth.isHurt { return .sick }
-        if todayGoalProgress >= 1 { return .recovered }
+        if BrainHealth.isHurt || isOverPhoneGoal { return .sick }
         if sleepActive || hour >= 23 || hour < 6 { return .resting }
         let s = today
-        let energy = 0.35 + todayGoalProgress * 0.6 + Double(min(s.shieldResists, 5)) * 0.05 + (hour < 12 ? 0.15 : 0)
-        return energy >= 0.55 ? .energetic : .slightlyTired
+        if isTrackingPhoneTime {
+            if phoneProgress < 0.6 { return s.focusSessions > 0 ? .recovered : .energetic }
+            return .slightlyTired
+        }
+        if s.focusSessions > 0 { return .recovered }
+        return hour < 12 || s.shieldResists > 0 ? .energetic : .slightlyTired
     }
 
     // MARK: Reset

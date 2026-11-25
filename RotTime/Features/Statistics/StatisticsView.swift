@@ -13,6 +13,8 @@ struct StatisticsView: View {
         let sessions: Int
         let resists: Int
         let blocks: Int
+        let phone: Int
+        let tracked: Bool
         var id: Date { date }
     }
 
@@ -29,7 +31,8 @@ struct StatisticsView: View {
         return (0..<count).reversed().compactMap { offset in
             guard let d = cal.date(byAdding: .day, value: -offset, to: today) else { return nil }
             let s = app.stats(for: d)
-            return DayPoint(date: d, minutes: s.focusMinutes, sessions: s.focusSessions, resists: s.shieldResists, blocks: s.blockSessions)
+            return DayPoint(date: d, minutes: s.focusMinutes, sessions: s.focusSessions, resists: s.shieldResists, blocks: s.blockSessions,
+                            phone: s.phoneMinutes, tracked: s.usageTracked)
         }
     }
 
@@ -61,6 +64,7 @@ struct StatisticsView: View {
                     .padding(.top, RTSpacing.s)
 
                     tiles
+                    phoneChartCard
                     chartCard
                     goalsCard
                     if range == .month { heatmapCard }
@@ -72,7 +76,7 @@ struct StatisticsView: View {
             }
         }
         .sheet(isPresented: $showRewards) { RewardsView() }
-        .sheet(isPresented: $editingGoals) { GoalEditor() }
+        .sheet(isPresented: $editingGoals) { PhoneGoalEditor() }
     }
 
     // MARK: Tiles
@@ -82,7 +86,10 @@ struct StatisticsView: View {
         let rangePoints = points
         return VStack(spacing: 12) {
             HStack(spacing: 12) {
-                StatTile(title: "Focus today", value: app.todayFocusMinutes.minutesText, symbol: "clock.fill", tint: app.theme.accent)
+                StatTile(title: app.isTrackingPhoneTime ? "Phone today (of \(app.phoneGoal.minutesText))" : "Phone today",
+                         value: app.isTrackingPhoneTime ? app.phoneMinutesToday.minutesText : "—", symbol: "iphone",
+                         tint: app.isOverPhoneGoal ? Color(hex: 0xE2505F) : app.theme.accent)
+                StatTile(title: "Focus today", value: app.todayFocusMinutes.minutesText, symbol: "clock.fill", tint: Color(hex: 0x3BAA66))
                 StatTile(title: "Current streak", value: "\(app.currentStreak) d", symbol: "flame.fill", tint: .orange)
             }
             HStack(spacing: 12) {
@@ -122,16 +129,10 @@ struct StatisticsView: View {
             Chart {
                 ForEach(data) { p in
                     BarMark(x: .value("Day", p.date, unit: .day), y: .value("Minutes", p.minutes))
-                        .foregroundStyle(p.minutes >= app.profile.dailyGoalMinutes ? AnyShapeStyle(app.theme.buttonGradient) : AnyShapeStyle(app.theme.accent.opacity(0.55)))
+                        .foregroundStyle(app.theme.buttonGradient)
                         .cornerRadius(range == .week ? 8 : 3)
                         .opacity(selectedDay == nil || Calendar.current.isDate(selectedDay!, inSameDayAs: p.date) ? 1 : 0.4)
                 }
-                RuleMark(y: .value("Goal", app.profile.dailyGoalMinutes))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                    .foregroundStyle(.secondary)
-                    .annotation(position: .top, alignment: .leading) {
-                        Text("Goal \(app.profile.dailyGoalMinutes.minutesText)").font(RTFont.caption()).foregroundStyle(.secondary)
-                    }
                 if let selectedDay, let p = data.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDay) }) {
                     RuleMark(x: .value("Selected", p.date, unit: .day))
                         .foregroundStyle(.clear)
@@ -161,6 +162,39 @@ struct StatisticsView: View {
         }
     }
 
+    // MARK: Phone time chart
+
+    private var phoneChartCard: some View {
+        Card {
+            SectionHeader(title: "Phone time vs. your goal", symbol: "iphone")
+            let data = points.filter(\.tracked)
+            if data.isEmpty {
+                Text("Choose what counts as phone time (Settings → Phone time) and RotTime will chart each day against the \(app.phoneGoal.minutesText) you want.")
+                    .font(RTFont.label(.medium)).foregroundStyle(.secondary).padding(.top, 6)
+            } else {
+                let under = data.filter { $0.phone <= app.phoneGoal }.count
+                Text("Under your goal on \(under) of \(data.count) tracked days")
+                    .font(RTFont.caption(.semibold)).foregroundStyle(.secondary).padding(.top, 4)
+                Chart {
+                    ForEach(data) { p in
+                        BarMark(x: .value("Day", p.date, unit: .day), y: .value("Phone minutes", p.phone))
+                            .foregroundStyle(p.phone > app.phoneGoal ? Color(hex: 0xE2505F) : app.theme.accent)
+                            .cornerRadius(range == .week ? 8 : 3)
+                    }
+                    RuleMark(y: .value("Goal", app.phoneGoal))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                        .foregroundStyle(.secondary)
+                        .annotation(position: .top, alignment: .leading) {
+                            Text("Goal \(app.phoneGoal.minutesText)").font(RTFont.caption()).foregroundStyle(.secondary)
+                        }
+                }
+                .chartYAxis { AxisMarks(position: .leading) }
+                .frame(height: 190)
+                .padding(.top, RTSpacing.m)
+            }
+        }
+    }
+
     // MARK: Goals
 
     private var goalsCard: some View {
@@ -170,10 +204,16 @@ struct StatisticsView: View {
                 Button("Edit") { editingGoals = true }.font(RTFont.label(.bold))
             }
             VStack(alignment: .leading, spacing: 14) {
-                goalRow(title: "Daily focus", value: app.todayFocusMinutes, target: app.profile.dailyGoalMinutes)
-                goalRow(title: "Weekly focus (last 7 days)", value: weekMinutes, target: app.profile.weeklyGoalMinutes)
-                let goalDays = points.filter { $0.minutes >= app.profile.dailyGoalMinutes }.count
-                goalRow(title: "Goal days this \(range.rawValue.lowercased())", value: goalDays, target: points.count, isCount: true)
+                goalRow(title: "Phone time today", value: app.phoneMinutesToday, target: app.phoneGoal)
+                let tracked = points.filter(\.tracked)
+                let under = tracked.filter { $0.phone <= app.phoneGoal }.count
+                goalRow(title: "Days under your goal this \(range.rawValue.lowercased())", value: under, target: max(1, tracked.count), isCount: true)
+                let saved = max(0, app.profile.phoneEstimateMinutes - app.phoneGoal)
+                if saved > 0 {
+                    Label("Before RotTime you guessed \(app.profile.phoneEstimateMinutes.minutesText)/day. Hitting your goal gives back \(saved.minutesText) every day.",
+                          systemImage: "arrow.uturn.backward.circle.fill")
+                        .font(RTFont.caption(.medium)).foregroundStyle(.secondary)
+                }
             }
             .padding(.top, RTSpacing.m)
         }
@@ -195,9 +235,9 @@ struct StatisticsView: View {
 
     private var heatmapCard: some View {
         Card {
-            SectionHeader(title: "Last 30 days", symbol: "calendar")
+            SectionHeader(title: "Last 30 days of focus", symbol: "calendar")
             let data = points
-            let goal = max(1, app.profile.dailyGoalMinutes)
+            let goal = max(1, data.map(\.minutes).max() ?? 1)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
                 ForEach(data) { p in
                     let level = min(1, Double(p.minutes) / Double(goal))
@@ -219,31 +259,5 @@ struct StatisticsView: View {
             .font(RTFont.caption(.medium))
             .foregroundStyle(app.theme.onBackground.opacity(0.8))
             .padding(.horizontal, 6)
-    }
-}
-
-struct GoalEditor: View {
-    @EnvironmentObject private var app: AppState
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Stepper(value: $app.profile.dailyGoalMinutes, in: 10...600, step: 5) {
-                        LabeledContent("Daily focus goal", value: app.profile.dailyGoalMinutes.minutesText)
-                    }
-                    Stepper(value: $app.profile.weeklyGoalMinutes, in: 30...4200, step: 30) {
-                        LabeledContent("Weekly focus goal", value: app.profile.weeklyGoalMinutes.minutesText)
-                    }
-                } footer: {
-                    Text("Pick goals that feel kind and achievable. You can always raise them later.")
-                }
-            }
-            .navigationTitle("Goals")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
-        .presentationDetents([.medium])
     }
 }

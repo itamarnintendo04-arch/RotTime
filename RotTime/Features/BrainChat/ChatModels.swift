@@ -45,7 +45,10 @@ struct ChatContext {
     var userName: String
     var brainName: String
     var focusMinutesToday: Int
+    /// The user's daily phone-time goal.
     var goalMinutes: Int
+    var phoneMinutesToday: Int = 0
+    var phoneTracked: Bool = false
     var sessionsToday: Int
     var streak: Int
     var resistsToday: Int
@@ -56,7 +59,8 @@ struct ChatContext {
     var isScreenTimeConnected: Bool
     var focusRunning: Bool
 
-    var goalLeft: Int { max(0, goalMinutes - focusMinutesToday) }
+    /// Phone minutes left before reaching the goal.
+    var goalLeft: Int { max(0, goalMinutes - phoneMinutesToday) }
     var partOfDay: String {
         switch hour {
         case 5..<12: return "morning"
@@ -89,6 +93,7 @@ enum ChatEvent {
     case blockStarted(name: String)
     case streakMilestone(days: Int)
     case goalReached
+    case phoneGoalReached
 }
 
 enum ChatStore {
