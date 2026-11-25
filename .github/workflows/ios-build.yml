@@ -3,6 +3,7 @@ name: iOS Build
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -11,6 +12,9 @@ on:
         type: choice
         options: [development, ad-hoc, release-testing, app-store-connect]
         default: development
+
+permissions:
+  contents: write
 
 concurrency:
   group: ios-build-${{ github.ref }}
@@ -182,6 +186,18 @@ jobs:
             build/logs
             build/TestResults.xcresult
           if-no-files-found: ignore
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: RotTime ${{ github.ref_name }}
+          body_path: docs/RELEASE_NOTES.md
+          files: |
+            build/RotTime-unsigned.ipa
+            build/export/*.ipa
+          fail_on_unmatched_files: false
+          prerelease: ${{ steps.signing.outputs.available != 'true' }}
 
       - name: Clean up keychain
         if: always() && steps.signing.outputs.available == 'true'
