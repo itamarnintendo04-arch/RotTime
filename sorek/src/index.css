@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Rubik", system-ui, sans-serif;
+  --color-ink-950: #07090f;
+  --color-ink-900: #0b0f17;
+  --color-ink-800: #121826;
+  --color-ink-700: #1b2333;
+  --color-ink-600: #2a3447;
+  --color-ink-400: #7a8599;
+  --color-ink-200: #c9d1de;
+  --color-accent: #34d399;
+  --color-accent-strong: #10b981;
+  --color-hit: #facc15;
+}
+
+html, body, #root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-ink-950);
+  color: #e6ebf2;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+mark.hit {
+  background: color-mix(in srgb, var(--color-hit) 35%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-hit) 60%, transparent);
+}
