@@ -2,6 +2,13 @@
 
 **Noodle**, an original animated brain, helps you spend less time on your phone using Apple's real Screen Time system.
 
+### New in 1.1: Free mode (works with AltStore and a free Apple ID)
+- RotTime detects when it was installed without Apple's paid Screen Time entitlement and switches to **free mode**.
+- **Real blocking** comes from iOS's own Screen Time (App Limits / Downtime). There's a step-by-step guide in the Shields tab.
+- **Noodle steps in through Shortcuts**: an automation such as "When Instagram is opened" calls *Should Noodle Step In?* → *Talk to Noodle*. You get the chat, call, voice note, letter or breathing moment, the "Actually, I don't want to" button, and 5/10/30 minutes that make Noodle sick.
+- An "Is Closed" automation (*Log App Closed*) lets RotTime count **how long and how often** you use each app.
+- A **daily check-in** records total phone time and **pickups** from Settings → Screen Time, so the brain's mood follows your goal.
+
 ### Highlights
 - **Phone time vs. your goal**: onboarding asks how much you use your phone now and how much you *want* to. Screen Time reports your usage in 10-minute steps, and Noodle's mood and health meter follow it, from glowing to really unwell.
 - **Today at a glance** (Apple's private report): time on the phone, **pickups**, and focus time.
@@ -12,5 +19,6 @@
 - **Screen Time check** in Settings, which explains exactly why the connection fails if it does.
 
 ### Installing
+- **AltStore / Sideloadly with a free Apple ID**: install `RotTime-unsigned.ipa`. Free mode turns on automatically.
 - `RotTime-unsigned.ipa` is **not signed**. Screen Time blocking needs Apple's *Family Controls* entitlement, so it only works in a build signed with a paid Apple Developer account whose profiles include that entitlement. See `docs/SIGNING.md` to have CI produce a signed IPA.
 - If signing secrets are configured, a signed `RotTime.ipa` is attached too.
