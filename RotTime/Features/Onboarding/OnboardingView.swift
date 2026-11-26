@@ -136,6 +136,11 @@ struct OnboardingView: View {
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Let's connect").font(RTFont.display(26))
+            if app.isFreeMode {
+                PermissionRow(symbol: "gift.fill", title: "Free mode",
+                              detail: "This install can't use Apple's paid Screen Time blocking. After setup, the Shields tab shows how to block with iOS Screen Time and let \(brainName.isEmpty ? "Noodle" : brainName) step in with Shortcuts.",
+                              done: true)
+            } else {
             Button {
                 Task { await screenTime.requestAuthorization() }
             } label: {
@@ -157,6 +162,7 @@ struct OnboardingView: View {
             .familyActivityPicker(isPresented: $showUsagePicker, selection: Binding(
                 get: { screenTime.usageSelection },
                 set: { app.profile.phoneGoalMinutes = phoneGoal; screenTime.setUsageSelection($0) }))
+            }
             Button {
                 Task { _ = await NotificationManager.requestAuthorization() }
             } label: {

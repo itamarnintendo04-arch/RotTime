@@ -18,12 +18,14 @@ struct UserProfile: Codable, Equatable {
     var checkInHour = 9
     var checkInMinute = 0
     var themeID: String = "cozy"
+    /// nil = decide automatically from the installed build's entitlements.
+    var freeModeOverride: Bool? = nil
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case userName, brainName, dailyGoalMinutes, weeklyGoalMinutes, phoneGoalMinutes, phoneEstimateMinutes
-        case onboardingComplete, hapticsEnabled, ambientAnimations, checkInReminderEnabled, checkInHour, checkInMinute, themeID
+        case onboardingComplete, hapticsEnabled, ambientAnimations, checkInReminderEnabled, checkInHour, checkInMinute, themeID, freeModeOverride
     }
 
     // Tolerant decoding so profiles saved by earlier versions keep working.
@@ -43,6 +45,7 @@ struct UserProfile: Codable, Equatable {
         checkInHour = try c.decodeIfPresent(Int.self, forKey: .checkInHour) ?? d.checkInHour
         checkInMinute = try c.decodeIfPresent(Int.self, forKey: .checkInMinute) ?? d.checkInMinute
         themeID = try c.decodeIfPresent(String.self, forKey: .themeID) ?? d.themeID
+        freeModeOverride = try c.decodeIfPresent(Bool.self, forKey: .freeModeOverride)
     }
 }
 
@@ -137,12 +140,33 @@ final class AppState: ObservableObject {
         focusHistory.filter { $0.kind == .focus }.map(\.seconds).max() ?? 0
     }
 
+    // MARK: Free mode
+
+    /// True when this build can't use Apple's Screen Time APIs (no paid entitlement),
+    /// or the user chose free mode in Settings.
+    var isFreeMode: Bool {
+        profile.freeModeOverride ?? (ScreenTimeCapability.entitlement == .missing)
+    }
+
+    /// Daily check-in from iOS Settings → Screen Time (free mode).
+    func saveManualCheckIn(screenMinutes: Int, pickups: Int) {
+        SharedStore.updateToday { s in
+            s.manualScreenMinutes = screenMinutes
+            s.manualPickups = pickups
+        }
+        FreeUsageStore.syncDayStats()
+        refreshShared()
+        evaluateRewards()
+    }
+
     // MARK: Phone time
 
     var phoneGoal: Int { max(1, profile.phoneGoalMinutes) }
     /// Phone time so far today (10-minute steps reported by Screen Time).
     var phoneMinutesToday: Int { today.phoneMinutes }
-    var isTrackingPhoneTime: Bool { SharedStore.usageTrackingConfigured }
+    var isTrackingPhoneTime: Bool {
+        isFreeMode ? (today.usageTracked || FreeUsageStore.isSetUp) : SharedStore.usageTrackingConfigured
+    }
     /// Can exceed 1 when over the goal.
     var phoneProgress: Double { Double(phoneMinutesToday) / Double(phoneGoal) }
     var phoneMinutesLeft: Int { max(0, phoneGoal - phoneMinutesToday) }

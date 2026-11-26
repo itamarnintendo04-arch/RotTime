@@ -55,7 +55,9 @@ struct InterventionView: View {
                                   center.takeBack(session)
                                   advance(to: .declined)
                               },
-                              onDone: { center.finish() })
+                              onDone: {
+                                  if case .granted = phase, let app = session.freeApp { center.finish(openApp: app) } else { center.finish() }
+                              })
                 .padding(.horizontal, RTSpacing.l)
                 .padding(.bottom, RTSpacing.s)
             }
@@ -144,14 +146,19 @@ struct DecisionPanel: View {
                 }
                 declineButton
             case .granted(let minutes):
-                if !session.isPreview {
+                if let app = session.freeApp {
+                    Text("\(minutes) minutes for \(app.name). I'll tell you when time's up.")
+                        .font(RTFont.caption(.semibold))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else if !session.isPreview {
                     Text("Unlocked for \(minutes) minutes — you can go back to it now.")
                         .font(RTFont.caption(.semibold))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 PrimaryButton(title: "I changed my mind — block it again", symbol: "heart.fill", theme: app.theme, action: onTakeBack)
-                Button("Okay…", action: onDone)
+                Button(session.freeApp.flatMap { $0.urlScheme == nil ? nil : "Okay… open \($0.name)" } ?? "Okay…", action: onDone)
                     .font(RTFont.label(.semibold))
                     .padding(.vertical, 8)
             case .declined:
@@ -182,10 +189,13 @@ struct DecisionPanel: View {
 /// Shows the app / site / category the request is about using Apple's private labels.
 struct RequestTargetLabel: View {
     let request: MoreTimeRequest?
+    var freeApp: DistractingApp? = nil
 
     var body: some View {
         Group {
-            if let token = request?.applicationToken {
+            if let app = freeApp {
+                Label(app.name, systemImage: app.symbol)
+            } else if let token = request?.applicationToken {
                 Label(token)
             } else if let token = request?.webDomainToken {
                 Label(token)
@@ -224,7 +234,7 @@ struct ChatInterventionStage: View {
                         Text(typing ? "typing…" : "wants to talk").font(RTFont.caption(.medium)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    RequestTargetLabel(request: session.request)
+                    RequestTargetLabel(request: session.request, freeApp: session.freeApp)
                 }
                 .padding(.horizontal, RTSpacing.l).padding(.vertical, 8)
                 .background(.bar)
@@ -322,7 +332,7 @@ struct FaceTimeStage: View {
                     .scaleEffect(ring ? 1.06 : 0.96)
                 Text(app.brainName).font(.system(size: 34, weight: .semibold))
                 Text("FaceTime Video…").font(.title3).foregroundStyle(.white.opacity(0.7))
-                RequestTargetLabel(request: session.request).environment(\.colorScheme, .dark)
+                RequestTargetLabel(request: session.request, freeApp: session.freeApp).environment(\.colorScheme, .dark)
                 Spacer()
                 HStack {
                     callButton(symbol: "phone.down.fill", color: .red, title: "Decline", action: onDecline)
@@ -438,7 +448,7 @@ struct VoiceNoteStage: View {
                 HStack {
                     Label("Voice message", systemImage: "waveform").font(RTFont.label(.bold))
                     Spacer()
-                    RequestTargetLabel(request: session.request)
+                    RequestTargetLabel(request: session.request, freeApp: session.freeApp)
                 }
                 .padding(.horizontal, RTSpacing.l)
                 .padding(.top, RTSpacing.s)
@@ -506,7 +516,7 @@ struct LetterStage: View {
         ZStack {
             ThemeBackgroundView(theme: app.theme, animated: true)
             VStack(spacing: RTSpacing.l) {
-                RequestTargetLabel(request: session.request).padding(.top, RTSpacing.s)
+                RequestTargetLabel(request: session.request, freeApp: session.freeApp).padding(.top, RTSpacing.s)
                 if opened {
                     paper.transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
@@ -598,7 +608,7 @@ struct BreathingStage: View {
         ZStack {
             ThemeBackgroundView(theme: app.theme, animated: true)
             VStack(spacing: RTSpacing.l) {
-                RequestTargetLabel(request: session.request).padding(.top, RTSpacing.s)
+                RequestTargetLabel(request: session.request, freeApp: session.freeApp).padding(.top, RTSpacing.s)
                 Spacer()
                 ZStack {
                     Circle().fill(app.theme.accent.opacity(0.18)).frame(width: expanded ? 330 : 190)

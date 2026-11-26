@@ -26,6 +26,22 @@ enum NotificationManager {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: focusEndID, content: content, trigger: trigger))
     }
 
+    static let allowanceID = "rt.free.allowance"
+
+    /// Free mode: tell the user when the extra minutes they took are over.
+    static func scheduleAllowanceEnd(app: String, minutes: Int, brainName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Time's up on \(app) 🤒"
+        content.body = "Your \(minutes) extra minutes are over. \(brainName) is lying down with a headache — come back?"
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(1, minutes * 60)), repeats: false)
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: allowanceID, content: content, trigger: trigger))
+    }
+
+    static func cancelAllowanceEnd() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [allowanceID])
+    }
+
     static func cancelFocusEnd() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [focusEndID])
     }

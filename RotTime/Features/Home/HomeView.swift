@@ -21,7 +21,7 @@ struct HomeView: View {
                     header
                     hero
                     PhoneTimeCard()
-                    ScreenTimeReportCard(kind: .today)
+                    if !app.isFreeMode { ScreenTimeReportCard(kind: .today) }
                     focusCard
                     quickActions
                     shieldCard

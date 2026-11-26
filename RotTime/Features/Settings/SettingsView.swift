@@ -46,6 +46,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Free mode", isOn: Binding(get: { app.isFreeMode },
+                                                      set: { app.profile.freeModeOverride = $0 }))
+                    if app.profile.freeModeOverride != nil {
+                        Button("Decide automatically") { app.profile.freeModeOverride = nil }
+                    }
+                } header: {
+                    Text("Mode")
+                } footer: {
+                    Text(ScreenTimeCapability.entitlement == .missing
+                         ? "This build has no Family Controls entitlement (e.g. installed with AltStore or a free Apple ID), so free mode is on: iOS Screen Time blocks apps and Shortcuts lets \(app.brainName) step in."
+                         : "Free mode uses iOS Screen Time and Shortcuts instead of RotTime's own shields.")
+                }
+
+                Section {
                     LabeledContent("Status", value: screenTime.statusText)
                     NavigationLink {
                         ScreenTimeDiagnosticsView()

@@ -253,6 +253,7 @@ struct FocusView: View {
     }
 
     private var blockSubtitle: String {
+        if app.isFreeMode { return "Free mode: turn on an iOS Focus or Downtime for real blocking." }
         if !screenTime.isAuthorized { return "Connect Screen Time in the Shields tab first." }
         guard let mode = screenTime.mode(.focus), mode.hasSelection else { return "No apps chosen yet." }
         return "\(mode.selectionCount) item\(mode.selectionCount == 1 ? "" : "s") from your Focus Mode list."

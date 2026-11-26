@@ -68,7 +68,7 @@ struct StatisticsView: View {
                     chartCard
                     goalsCard
                     if range == .month { heatmapCard }
-                    ScreenTimeReportCard(kind: .week)
+                    if !app.isFreeMode { ScreenTimeReportCard(kind: .week) }
                     honestyNote
                 }
                 .padding(.horizontal, RTSpacing.l)

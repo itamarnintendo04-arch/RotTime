@@ -23,7 +23,9 @@ struct PhoneTimeCard: View {
                     Label("Goal \(app.phoneGoal.minutesText)", systemImage: "target").font(RTFont.caption(.bold))
                 }
             }
-            if app.isTrackingPhoneTime && screenTime.isAuthorized {
+            if app.isFreeMode {
+                FreePhoneTimeSummary()
+            } else if app.isTrackingPhoneTime && screenTime.isAuthorized {
                 tracked
             } else {
                 setup

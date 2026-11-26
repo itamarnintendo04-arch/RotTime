@@ -26,6 +26,37 @@ struct BlockingView: View {
                     }
                     .padding(.top, RTSpacing.s)
 
+                    if app.isFreeMode {
+                        FreeModeShieldsSection()
+                    } else {
+                        paidShields
+                    }
+                }
+                .padding(.horizontal, RTSpacing.l)
+                .padding(.bottom, MainTabView.tabBarClearance)
+            }
+        }
+        .sheet(item: $editing) { mode in ModeEditorView(mode: mode) }
+        .sheet(isPresented: $showDiagnostics) {
+            NavigationStack {
+                ScreenTimeDiagnosticsView()
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showDiagnostics = false } } }
+            }
+        }
+        .familyActivityPicker(isPresented: $showInstantPicker, selection: $instantSelection)
+        .onAppear {
+            if let instant = screenTime.mode(.instant) { instantSelection = instant.selection }
+        }
+        .onChange(of: instantSelection) { _, newValue in
+            guard var instant = screenTime.mode(.instant) else { return }
+            instant.selection = newValue
+            screenTime.save(instant)
+        }
+    }
+
+    /// Everything that needs Apple's Family Controls entitlement.
+    @ViewBuilder
+    private var paidShields: some View {
                     if !screenTime.isAuthorized { authorizationCard }
                     if let request = MoreTimeRequests.latest {
                         Card {
@@ -61,27 +92,6 @@ struct BlockingView: View {
                         }
                     }
                     interventionCard
-                }
-                .padding(.horizontal, RTSpacing.l)
-                .padding(.bottom, MainTabView.tabBarClearance)
-            }
-        }
-        .sheet(item: $editing) { mode in ModeEditorView(mode: mode) }
-        .sheet(isPresented: $showDiagnostics) {
-            NavigationStack {
-                ScreenTimeDiagnosticsView()
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showDiagnostics = false } } }
-            }
-        }
-        .familyActivityPicker(isPresented: $showInstantPicker, selection: $instantSelection)
-        .onAppear {
-            if let instant = screenTime.mode(.instant) { instantSelection = instant.selection }
-        }
-        .onChange(of: instantSelection) { _, newValue in
-            guard var instant = screenTime.mode(.instant) else { return }
-            instant.selection = newValue
-            screenTime.save(instant)
-        }
     }
 
     // MARK: Authorization

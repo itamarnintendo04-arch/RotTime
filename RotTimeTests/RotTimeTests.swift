@@ -206,3 +206,29 @@ final class BrainMoodTests: XCTestCase {
         }
     }
 }
+
+final class FreeModeTests: XCTestCase {
+    func testOpenCloseCountsTimeAndOpens() {
+        let start = Date()
+        let before = FreeUsageStore.today(start)[.reddit] ?? FreeUsageStore.AppDay()
+        FreeUsageStore.logOpened(.reddit, at: start)
+        FreeUsageStore.logClosed(.reddit, at: start.addingTimeInterval(600))
+        let after = FreeUsageStore.today(start)[.reddit]!
+        XCTAssertEqual(after.opens, before.opens + 1)
+        XCTAssertEqual(after.seconds - before.seconds, 600, accuracy: 1)
+    }
+
+    func testAllowanceSilencesNoodle() {
+        FreeUsageStore.revokeAllowance(.netflix)
+        XCTAssertTrue(FreeUsageStore.shouldIntervene(for: .netflix))
+        FreeUsageStore.allow(.netflix, minutes: 5)
+        XCTAssertFalse(FreeUsageStore.shouldIntervene(for: .netflix))
+        FreeUsageStore.revokeAllowance(.netflix)
+        XCTAssertTrue(FreeUsageStore.shouldIntervene(for: .netflix))
+    }
+
+    func testFreeSessionIsNotAPreview() {
+        let s = InterventionSession(request: nil, freeApp: .instagram, style: .letter)
+        XCTAssertFalse(s.isPreview)
+    }
+}

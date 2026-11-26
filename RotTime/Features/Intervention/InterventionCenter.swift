@@ -73,6 +73,7 @@ enum InterventionPhase: Equatable {
 struct InterventionSession: Identifiable {
     let id = UUID()
     let request: MoreTimeRequest?
+    var freeApp: DistractingApp? = nil
     let style: InterventionStyle
     let greeting = InterventionCopy.line(InterventionCopy.greetings)
     let ask = InterventionCopy.line(InterventionCopy.asks)
@@ -81,7 +82,7 @@ struct InterventionSession: Identifiable {
     let declineLine = InterventionCopy.line(InterventionCopy.declines)
     let grantedTemplate = InterventionCopy.line(InterventionCopy.granted)
     /// Previews (from Settings) don't unlock anything or touch stats.
-    var isPreview: Bool { request == nil }
+    var isPreview: Bool { request == nil && freeApp == nil }
 
     func grantedLine(_ minutes: Int) -> String { String(format: grantedTemplate, minutes) }
 }
@@ -97,6 +98,12 @@ final class InterventionCenter: ObservableObject {
     /// Opens the most recent unhandled request, if any.
     func presentPendingIfNeeded(requestID: String? = nil) {
         guard session == nil, AppState.shared.profile.onboardingComplete else { return }
+        // Free mode: a Shortcuts automation asked Noodle to step in.
+        if let app = FreeUsageStore.pendingApp {
+            FreeUsageStore.pendingApp = nil
+            session = InterventionSession(request: nil, freeApp: app, style: InterventionStyle.next())
+            return
+        }
         let pending = MoreTimeRequests.pending
         let request = requestID.flatMap { id in pending.first { $0.id.uuidString == id } } ?? MoreTimeRequests.latest
         guard let request else { return }
@@ -109,6 +116,12 @@ final class InterventionCenter: ObservableObject {
 
     func decline(_ s: InterventionSession) {
         Haptics.success(AppState.shared.profile.hapticsEnabled)
+        if s.freeApp != nil {
+            SharedStore.updateToday { $0.moreTimeDeclined += 1; $0.shieldResists += 1 }
+            AppState.shared.refreshShared()
+            AppState.shared.evaluateRewards()
+            return
+        }
         guard let request = s.request else { return }
         MoreTimeRequests.resolve(request.id)
         SharedStore.updateToday { $0.moreTimeDeclined += 1; $0.shieldResists += 1 }
@@ -118,6 +131,14 @@ final class InterventionCenter: ObservableObject {
 
     func grant(_ s: InterventionSession, minutes: Int) {
         Haptics.warning(AppState.shared.profile.hapticsEnabled)
+        if let app = s.freeApp {
+            FreeUsageStore.allow(app, minutes: minutes)
+            SharedStore.updateToday { $0.mindfulUnlocks += 1; $0.extraMinutes += minutes }
+            BrainHealth.hurt(forMinutes: minutes)
+            NotificationManager.scheduleAllowanceEnd(app: app.name, minutes: minutes, brainName: AppState.shared.brainName)
+            AppState.shared.refreshShared()
+            return
+        }
         guard let request = s.request else { return }
         MoreTimeRequests.resolve(request.id)
         let unlocked = ShieldController.grantTemporaryUnlock(application: request.applicationToken,
@@ -136,6 +157,14 @@ final class InterventionCenter: ObservableObject {
     func takeBack(_ s: InterventionSession) {
         Haptics.success(AppState.shared.profile.hapticsEnabled)
         guard !s.isPreview else { return }
+        if let app = s.freeApp {
+            FreeUsageStore.revokeAllowance(app)
+            NotificationManager.cancelAllowanceEnd()
+            BrainHealth.heal()
+            SharedStore.updateToday { $0.moreTimeDeclined += 1 }
+            AppState.shared.refreshShared()
+            return
+        }
         ShieldController.revokeTemporaryUnlocks()
         BrainHealth.heal()
         SharedStore.updateToday { $0.moreTimeDeclined += 1 }
@@ -143,9 +172,12 @@ final class InterventionCenter: ObservableObject {
         AppState.shared.refreshShared()
     }
 
-    func finish() {
+    func finish(openApp: DistractingApp? = nil) {
         Speaker.shared.stop()
         session = nil
+        if let openApp {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { openApp.open() }
+        }
     }
 }
 

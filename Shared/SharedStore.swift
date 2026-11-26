@@ -174,11 +174,14 @@ public struct DayStats: Codable, Equatable {
     public var phoneMinutes: Int = 0
     /// Whether phone-time tracking was running that day.
     public var usageTracked: Bool = false
+    /// Free mode: what the user copied from iOS Settings → Screen Time in the daily check-in.
+    public var manualScreenMinutes: Int = 0
+    public var manualPickups: Int = 0
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case focusSeconds, focusSessions, breaks, blockSessions, shieldResists, mindfulUnlocks, chatMessages, moreTimeDeclined, extraMinutes, phoneMinutes, usageTracked
+        case focusSeconds, focusSessions, breaks, blockSessions, shieldResists, mindfulUnlocks, chatMessages, moreTimeDeclined, extraMinutes, phoneMinutes, usageTracked, manualScreenMinutes, manualPickups
     }
 
     // Tolerant decoding so stats saved by older versions keep loading.
@@ -195,6 +198,8 @@ public struct DayStats: Codable, Equatable {
         extraMinutes = try c.decodeIfPresent(Int.self, forKey: .extraMinutes) ?? 0
         phoneMinutes = try c.decodeIfPresent(Int.self, forKey: .phoneMinutes) ?? 0
         usageTracked = try c.decodeIfPresent(Bool.self, forKey: .usageTracked) ?? false
+        manualScreenMinutes = try c.decodeIfPresent(Int.self, forKey: .manualScreenMinutes) ?? 0
+        manualPickups = try c.decodeIfPresent(Int.self, forKey: .manualPickups) ?? 0
     }
 
     public var focusMinutes: Int { Int(focusSeconds / 60) }
